@@ -180,6 +180,9 @@ void LiteQuery::start_up() {
             this->perform_runSmcMethod(ton::create_block_id(q.id_), static_cast<WorkchainId>(q.account_->workchain_),
                                        q.account_->id_, q.mode_, q.method_id_, std::move(q.params_));
           },
+          [&](lite_api::liteServer_getLibraries& q) {
+            this->perform_getLibraries(q.library_list_);
+          },
           [&](auto& obj) { this->abort_query(td::Status::Error(ErrorCode::protoviolation, "unknown query")); }));
 }
 
@@ -741,6 +744,24 @@ void LiteQuery::perform_runSmcMethod(BlockIdExt blkid, WorkchainId workchain, St
     return;
   }
   perform_getAccountState(blkid, workchain, addr, mode | 0x10000);
+}
+
+void LiteQuery::perform_getLibraries(std::vector<td::Bits256> library_list) {
+  LOG(INFO) << "started a getLibraries(<list of " << library_list.size() << " parameters>) liteserver query";
+  auto rconfig = block::ConfigInfo::extract_config(mc_state_->root_cell(), block::ConfigInfo::needLibraries);
+  if (rconfig.is_error()) {
+    fatal_error("cannot extract library list block configuration from masterchain state");
+    return;
+  }
+  auto config = rconfig.move_as_ok();
+  std::vector<ton::tl_object_ptr<ton::lite_api::liteServer_libraryEntry>> a;
+  for (const auto& hash : library_list) {
+    auto data = vm::std_boc_serialize(config->lookup_library(hash));
+    if (data.is_ok())
+      a.push_back(ton::create_tl_object<ton::lite_api::liteServer_libraryEntry>(hash, data.move_as_ok()));
+  }
+  auto b = ton::create_serialize_tl_object<ton::lite_api::liteServer_libraryResult>(std::move(a));
+  finish_query(std::move(b));
 }
 
 void LiteQuery::perform_getOneTransaction(BlockIdExt blkid, WorkchainId workchain, StdSmcAddress addr, LogicalTime lt) {
