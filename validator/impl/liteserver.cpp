@@ -748,6 +748,12 @@ void LiteQuery::perform_runSmcMethod(BlockIdExt blkid, WorkchainId workchain, St
 
 void LiteQuery::perform_getLibraries(std::vector<td::Bits256> library_list) {
   LOG(INFO) << "started a getLibraries(<list of " << library_list.size() << " parameters>) liteserver query";
+  if (library_list.size() > 127) {
+    LOG(INFO) << "too many libraries requested, returning only first 127";
+    library_list.resize(127);
+  }
+  sort( library_list.begin(), library_list.end() );
+  library_list.erase( unique( library_list.begin(), library_list.end() ), library_list.end() );
   td::actor::send_closure_later(
       manager_, &ton::validator::ValidatorManager::get_top_masterchain_state_block,
       [Self = actor_id(this), library_list](td::Result<std::pair<Ref<ton::validator::MasterchainState>, BlockIdExt>> res) -> void {
