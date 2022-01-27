@@ -3478,7 +3478,7 @@ td::Result<vm::StackEntry> from_tonlib_api(tonlib_api::tvm_StackEntry& entry) {
 
 void deep_library_search(std::set<td::Bits256>& set, std::set<vm::Cell::Hash>& visited,
                          vm::Dictionary libs, td::Ref<vm::Cell> cell, int depth) {
-  if (depth <= 0 || set.size() >= 127 || visited.size() >= 1000) {
+  if (depth <= 0 || set.size() >= 16 || visited.size() >= 256) {
     return;
   }
   auto ins = visited.insert(cell->get_hash());
@@ -3540,7 +3540,7 @@ td::Status TonlibClient::do_request(const tonlib_api::smc_runGetMethod& request,
     if (code.not_null()) {
       std::set<td::Bits256> librarySet;
       std::set<vm::Cell::Hash> visited;
-      deep_library_search(librarySet, visited, self->libraries, code, 20);
+      deep_library_search(librarySet, visited, self->libraries, code, 24);
       std::vector<td::Bits256> libraryList{librarySet.begin(), librarySet.end()};
       if (libraryList.size() > 0) {
         LOG(DEBUG) << "Requesting found libraries in code (" << libraryList.size() << ")";

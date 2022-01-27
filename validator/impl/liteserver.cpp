@@ -748,9 +748,9 @@ void LiteQuery::perform_runSmcMethod(BlockIdExt blkid, WorkchainId workchain, St
 
 void LiteQuery::perform_getLibraries(std::vector<td::Bits256> library_list) {
   LOG(INFO) << "started a getLibraries(<list of " << library_list.size() << " parameters>) liteserver query";
-  if (library_list.size() > 127) {
-    LOG(INFO) << "too many libraries requested, returning only first 127";
-    library_list.resize(127);
+  if (library_list.size() > 16) {
+    LOG(INFO) << "too many libraries requested, returning only first 16";
+    library_list.resize(16);
   }
   sort( library_list.begin(), library_list.end() );
   library_list.erase( unique( library_list.begin(), library_list.end() ), library_list.end() );
