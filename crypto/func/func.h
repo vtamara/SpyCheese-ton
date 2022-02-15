@@ -333,6 +333,8 @@ struct VarDescr {
   static constexpr int FiniteUInt = FiniteInt | _Pos;
   int val;
   td::RefInt256 int_const;
+  std::string str_const;
+
   VarDescr(var_idx_t _idx = -1, int _flags = 0, int _val = 0) : idx(_idx), flags(_flags), val(_val) {
   }
   bool operator<(var_idx_t other_idx) const {
@@ -403,6 +405,7 @@ struct VarDescr {
   }
   void set_const(long long value);
   void set_const(td::RefInt256 value);
+  void set_const(std::string value);
   void set_const_nan();
   void operator+=(const VarDescr& y) {
     flags &= y.flags;
@@ -527,7 +530,8 @@ struct Op {
     _While,
     _Until,
     _Repeat,
-    _Again
+    _Again,
+    _SliceConst
   };
   int cl;
   enum { _Disabled = 1, _Reachable = 2, _NoReturn = 4, _ImpureR = 8, _ImpureW = 16, _Impure = 24 };
@@ -540,6 +544,7 @@ struct Op {
   std::vector<var_idx_t> left, right;
   std::unique_ptr<Op> block0, block1;
   td::RefInt256 int_const;
+  std::string str_const;
   Op(const SrcLocation& _where = {}, int _cl = _Undef) : cl(_cl), flags(0), fun_ref(nullptr), where(_where) {
   }
   Op(const SrcLocation& _where, int _cl, const std::vector<var_idx_t>& _left)
@@ -550,6 +555,9 @@ struct Op {
   }
   Op(const SrcLocation& _where, int _cl, const std::vector<var_idx_t>& _left, td::RefInt256 _const)
       : cl(_cl), flags(0), fun_ref(nullptr), where(_where), left(_left), int_const(_const) {
+  }
+  Op(const SrcLocation& _where, int _cl, const std::vector<var_idx_t>& _left, std::string _const)
+      : cl(_cl), flags(0), fun_ref(nullptr), where(_where), left(_left), str_const(_const) {
   }
   Op(const SrcLocation& _where, int _cl, const std::vector<var_idx_t>& _left, const std::vector<var_idx_t>& _right,
      SymDef* _fun = nullptr)
@@ -817,7 +825,8 @@ struct Expr {
     _LetFirst,
     _Hole,
     _Type,
-    _CondExpr
+    _CondExpr,
+    _SliceConst
   };
   int cls;
   int val{0};
@@ -825,6 +834,7 @@ struct Expr {
   int flags{0};
   SrcLocation here;
   td::RefInt256 intval;
+  std::string strval;
   SymDef* sym{nullptr};
   TypeExpr* e_type{nullptr};
   std::vector<Expr*> args;

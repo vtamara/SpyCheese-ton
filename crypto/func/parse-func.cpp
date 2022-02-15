@@ -19,6 +19,9 @@
 #include "func.h"
 #include "td/utils/crypto.h"
 #include "common/refint.h"
+#include "openssl/digest.hpp"
+#include "block/block.h"
+#include "block-parse.h"
 #include <fstream>
 
 namespace sym {
@@ -322,6 +325,21 @@ Expr* make_func_apply(Expr* fun, Expr* x) {
   return res;
 }
 
+// Can't find any adequate solution, bits_to_hex does not work correctly
+std::string string_to_hex(const std::string& input)
+{
+  static const char hex_digits[] = "0123456789ABCDEF";
+
+  std::string output;
+  output.reserve(input.length() * 2);
+  for (unsigned char c : input)
+  {
+    output.push_back(hex_digits[c >> 4]);
+    output.push_back(hex_digits[c & 15]);
+  }
+  return output;
+}
+
 Expr* parse_expr(Lexer& lex, CodeBlob& code, bool nv = false);
 
 // parse ( E { , E } ) | () | [ E { , E } ] | [] | id | num | _
@@ -385,6 +403,78 @@ Expr* parse_expr100(Lexer& lex, CodeBlob& code, bool nv) {
       lex.cur().error_at("invalid integer constant `", "`");
     }
     res->e_type = TypeExpr::new_atomic(_Int);
+    lex.next();
+    return res;
+  }
+  if (t == Lexem::String) {
+    std::string str = lex.cur().str;
+    int str_type = lex.cur().val;
+    Expr* res;
+    switch (str_type) {
+      case 0:
+      case 's':
+      case 'a':
+      {
+        res = new Expr{Expr::_SliceConst, lex.cur().loc};
+        res->e_type = TypeExpr::new_atomic(_Slice);
+        break;
+      }
+      case 'u':
+      case 'h':
+      {
+        res = new Expr{Expr::_Const, lex.cur().loc};
+        res->e_type = TypeExpr::new_atomic(_Int);
+        break;
+      }
+      default:
+      {
+        res = new Expr{Expr::_Const, lex.cur().loc};
+        res->e_type = TypeExpr::new_atomic(_Int);
+        lex.cur().error("invalid string type `" + std::string(1, static_cast<char>(str_type)) + "`");
+        return res;
+      }
+    }
+    res->flags = Expr::_IsRvalue;
+    switch (str_type) {
+      case 0: {
+        res->strval = string_to_hex(str);
+        break;
+      }
+      case 's': {
+        res->strval = str;
+        unsigned char buff[128];
+        int bits = (int)td::bitstring::parse_bitstring_hex_literal(buff, sizeof(buff), str.data(), str.data() + str.size());
+        if (bits < 0) {
+          lex.cur().error_at("Invalid hex bitstring constant `", "`");
+        }
+        break;
+      }
+      case 'a': {  // MsgAddressInt
+        block::StdAddress a;
+        if (a.parse_addr(str)) {
+          res->strval = block::tlb::MsgAddressInt().pack_std_address(a)->as_bitslice().to_hex();
+        } else {
+          lex.cur().error_at("invalid standard address `", "`");
+        }
+        break;
+      }
+      case 'u': {
+        res->intval = td::hex_string_to_int256(string_to_hex(str));
+        if (!str.size()) {
+          lex.cur().error("empty integer ascii-constant");
+        }
+        if (res->intval.is_null()) {
+          lex.cur().error_at("too long integer ascii-constant `", "`");
+        }
+        break;
+      }
+      case 'h': {
+        unsigned char hash[32];
+        digest::hash_str<digest::SHA256>(hash, str.data(), str.size());
+        res->intval = td::bits_to_refint(hash, 32, false);
+        break;
+      }
+    }
     lex.next();
     return res;
   }

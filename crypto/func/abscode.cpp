@@ -168,6 +168,11 @@ void VarDescr::set_const(td::RefInt256 value) {
   }
 }
 
+void VarDescr::set_const(std::string value) {
+  str_const = value;
+  val = _Const;
+}
+
 void VarDescr::set_const_nan() {
   set_const(td::make_refint());
 }
