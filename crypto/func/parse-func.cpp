@@ -325,21 +325,6 @@ Expr* make_func_apply(Expr* fun, Expr* x) {
   return res;
 }
 
-// Can't find any adequate solution, bits_to_hex does not work correctly
-std::string string_to_hex(const std::string& input)
-{
-  static const char hex_digits[] = "0123456789ABCDEF";
-
-  std::string output;
-  output.reserve(input.length() * 2);
-  for (unsigned char c : input)
-  {
-    output.push_back(hex_digits[c >> 4]);
-    output.push_back(hex_digits[c & 15]);
-  }
-  return output;
-}
-
 Expr* parse_expr(Lexer& lex, CodeBlob& code, bool nv = false);
 
 // parse ( E { , E } ) | () | [ E { , E } ] | [] | id | num | _
@@ -439,7 +424,7 @@ Expr* parse_expr100(Lexer& lex, CodeBlob& code, bool nv) {
     res->flags = Expr::_IsRvalue;
     switch (str_type) {
       case 0: {
-        res->strval = string_to_hex(str);
+        res->strval = td::hex_encode(str);
         break;
       }
       case 's': {
@@ -461,7 +446,7 @@ Expr* parse_expr100(Lexer& lex, CodeBlob& code, bool nv) {
         break;
       }
       case 'u': {
-        res->intval = td::hex_string_to_int256(string_to_hex(str));
+        res->intval = td::hex_string_to_int256(td::hex_encode(str));
         if (!str.size()) {
           lex.cur().error("empty integer ascii-constant");
         }

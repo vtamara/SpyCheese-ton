@@ -1,0 +1,49 @@
+slice ascii_slice() method_id {
+  return "string";
+}
+
+slice raw_slice() method_id {
+  return "ABCDEF"s;
+}
+
+slice addr_slice() method_id {
+  return "Ef_Vn8k7XNo8QC1tDf72UQYfvLxAxupM5Cb5phnOVmg_0JTb"a;
+}
+
+int string_hex() method_id {
+  return "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345"u;
+}
+
+int string_minihash() method_id {
+  return "transfer(slice, int)"h;
+}
+
+int string_maxihash() method_id {
+  return "transfer(slice, int)"H;
+}
+
+int string_crc32() method_id {
+  return "transfer(slice, int)"c;
+}
+
+builder newc() asm "NEWC";
+slice endcs(builder b) asm "ENDC" "CTOS";
+int sdeq (slice s1, slice s2) asm "SDEQ";
+
+_ main() {
+  slice s_ascii = ascii_slice();
+  slice s_raw = raw_slice();
+  slice s_addr = addr_slice();
+  int i_hex = string_hex();
+  int i_mini = string_minihash();
+  int i_maxi = string_maxihash();
+  int i_crc = string_crc32();
+  throw_unless(1, sdeq(s_ascii, newc().store_uint(0x737472696E67, 12 * 4).endcs()));
+  throw_unless(2, sdeq(s_raw, newc().store_uint(0xABCDEF, 6 * 4).endcs()));
+  throw_unless(3, sdeq(s_addr, newc().store_uint(4, 3).store_int(-1, 8)
+    .store_uint(0xD59FC93B5CDA3C402D6D0DFEF651061FBCBC40C6EA4CE426F9A619CE56683FD0, 256).endcs()));
+  throw_unless(4, i_hex == 0x4142434445464748494A4B4C4D4E4F505152535455565758595A303132333435);
+  throw_unless(5, i_mini == 0x7a62e8a8);
+  throw_unless(6, i_maxi == 0x7a62e8a8ebac41bd6de16c65e7be363bc2d2cbc6a0873778dead4795c13db979);
+  throw_unless(7, i_crc == 2235694568);
+}
