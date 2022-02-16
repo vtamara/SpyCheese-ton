@@ -421,6 +421,7 @@ Expr* parse_expr100(Lexer& lex, CodeBlob& code, bool nv) {
       }
       case 'u':
       case 'h':
+      case 'H':
       {
         res = new Expr{Expr::_Const, lex.cur().loc};
         res->e_type = TypeExpr::new_atomic(_Int);
@@ -468,10 +469,12 @@ Expr* parse_expr100(Lexer& lex, CodeBlob& code, bool nv) {
         }
         break;
       }
-      case 'h': {
+      case 'h':
+      case 'H':
+      {
         unsigned char hash[32];
         digest::hash_str<digest::SHA256>(hash, str.data(), str.size());
-        res->intval = td::bits_to_refint(hash, 32, false);
+        res->intval = td::bits_to_refint(hash, (str_type == 'h') ? 32 : 256, false);
         break;
       }
     }
