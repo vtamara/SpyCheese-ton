@@ -1,18 +1,18 @@
 const int1 = 1, int2 = 2;
 
-const int101 = 101;
-const int111 = 111;
+const int int101 = 101;
+const int int111 = 111;
 
 const int1r = int1;
 
 const str1 = "const1", str2 = "aabbcc"s;
 
-const str2r = str2;
+const slice str2r = str2;
 
 const str1int = 0x636f6e737431;
 const str2int = 0xAABBCC;
 
-const nibbles = 4;
+const int nibbles = 4;
 
 int iget1() { return int1; }
 int iget2() { return int2; }

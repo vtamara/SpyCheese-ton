@@ -237,6 +237,14 @@ Expr* parse_expr(Lexer& lex, CodeBlob& code, bool nv = false);
 
 void parse_const_decl(Lexer& lex) {
   SrcLocation loc = lex.cur().loc;
+  int wanted_type = Expr::_None;
+  if (lex.tp() == _Int) {
+    wanted_type = Expr::_Const;
+    lex.next();
+  } else if (lex.tp() == _Slice) {
+    wanted_type = Expr::_SliceConst;
+    lex.next();
+  }
   if (lex.tp() != _Ident) {
     lex.expect(_Ident, "constant name");
   }
@@ -259,16 +267,16 @@ void parse_const_decl(Lexer& lex) {
   if (x->flags != Expr::_IsRvalue) {
     lex.cur().error("expression is not strictly Rvalue");
   }
+  if ((wanted_type != Expr::_None) && (x->cls != wanted_type)) {
+    lex.cur().error("expression type does not match wanted type");
+  }
   if (x->cls == Expr::_Const) { // Integer constant
     sym_def->value = new SymValConst{const_cnt++, x->intval};
-  }
-  else if (x->cls == Expr::_SliceConst) { // Slice constant (string)
+  } else if (x->cls == Expr::_SliceConst) { // Slice constant (string)
     sym_def->value = new SymValConst{const_cnt++, x->strval};
-  }
-  else if (x->cls == Expr::_Apply) {
+  } else if (x->cls == Expr::_Apply) {
     lex.cur().error("precompilation of complex expressions not yet supported");
-  }
-  else {
+  } else {
     lex.cur().error("integer or slice literal or constant expected");
   }
 }
