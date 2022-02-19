@@ -24,6 +24,10 @@ slice sget1() { return str1; }
 slice sget2() { return str2; }
 slice sget2r() { return str2r; }
 
+const int int240 = ((int1 + int2) * 10) << 3;
+
+int iget240() { return int240; }
+
 builder newc() asm "NEWC";
 slice endcs(builder b) asm "ENDC" "CTOS";
 int sdeq (slice s1, slice s2) asm "SDEQ";
@@ -45,4 +49,7 @@ _ main() {
     throw_unless(int111, sdeq(s1, newc().store_uint(str1int, 12 * nibbles).endcs()));
     throw_unless(112, sdeq(s2, newc().store_uint(str2int, 6 * nibbles).endcs()));
     throw_unless(113, sdeq(s3, newc().store_uint(0x636f6e737431ABCDEF, 18 * nibbles).endcs()));
+
+    int i4 = iget240();
+    throw_unless(104, i4 == 240);
 }

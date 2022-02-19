@@ -942,6 +942,7 @@ struct AsmOp {
   int a, b, c;
   bool gconst{false};
   std::string op;
+  td::RefInt256 origin;
   struct SReg {
     int idx;
     SReg(int _idx) : idx(_idx) {
@@ -959,6 +960,9 @@ struct AsmOp {
   AsmOp(int _t, int _a, int _b) : t(_t), a(_a), b(_b) {
   }
   AsmOp(int _t, int _a, int _b, std::string _op) : t(_t), a(_a), b(_b), op(std::move(_op)) {
+    compute_gconst();
+  }
+  AsmOp(int _t, int _a, int _b, std::string _op, td::RefInt256 x) : t(_t), a(_a), b(_b), op(std::move(_op)), origin(x) {
     compute_gconst();
   }
   AsmOp(int _t, int _a, int _b, int _c) : t(_t), a(_a), b(_b), c(_c) {
@@ -1079,10 +1083,10 @@ struct AsmOp {
   static AsmOp make_stk3(int a, int b, int c, const char* str, int delta);
   static AsmOp IntConst(td::RefInt256 value);
   static AsmOp BoolConst(bool f);
-  static AsmOp Const(std::string push_op) {
-    return AsmOp(a_const, 0, 1, std::move(push_op));
+  static AsmOp Const(std::string push_op, td::RefInt256 origin = {}) {
+    return AsmOp(a_const, 0, 1, std::move(push_op), origin);
   }
-  static AsmOp Const(int arg, std::string push_op);
+  static AsmOp Const(int arg, std::string push_op, td::RefInt256 origin = {});
   static AsmOp Comment(std::string comment) {
     return AsmOp(a_none, std::string{"// "} + comment);
   }

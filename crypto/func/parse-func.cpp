@@ -267,6 +267,8 @@ void parse_const_decl(Lexer& lex) {
   if (x->flags != Expr::_IsRvalue) {
     lex.cur().error("expression is not strictly Rvalue");
   }
+  if ((wanted_type == Expr::_Const) && (x->cls == Expr::_Apply))
+    wanted_type = Expr::_None; // Apply is additionally checked to result in an integer
   if ((wanted_type != Expr::_None) && (x->cls != wanted_type)) {
     lex.cur().error("expression type does not match wanted type");
   }
@@ -275,7 +277,33 @@ void parse_const_decl(Lexer& lex) {
   } else if (x->cls == Expr::_SliceConst) { // Slice constant (string)
     sym_def->value = new SymValConst{const_cnt++, x->strval};
   } else if (x->cls == Expr::_Apply) {
-    lex.cur().error("precompilation of complex expressions not yet supported");
+    code.emplace_back(loc, Op::_Import, std::vector<var_idx_t>());
+    auto tmp_vars = x->pre_compile(code);
+    code.emplace_back(loc, Op::_Return, std::move(tmp_vars));
+    code.emplace_back(loc, Op::_Nop); // This is neccessary to prevent SIGSEGV!
+    // It is REQUIRED to execute "optimizations" as in func.cpp
+    code.simplify_var_types();
+    code.prune_unreachable_code();
+    code.split_vars(true);
+    for (int i = 0; i < 16; i++) {
+      code.compute_used_code_vars();
+      code.fwd_analyze();
+      code.prune_unreachable_code();
+    }
+    code.mark_noreturn();
+    AsmOpList out_list(0, &code.vars);
+    code.generate_code(out_list);
+    if (out_list.list_.size() != 1) {
+      lex.cur().error("precompiled expression must result in single operation");
+    }
+    auto op = out_list.list_[0];
+    if (!op.is_const()) {
+      lex.cur().error("precompiled expression must result in compilation time constant");
+    }
+    if (op.origin.is_null() || !op.origin->is_valid()) {
+      lex.cur().error("precompiled expression did not result in a valid integer constant");
+    }
+    sym_def->value = new SymValConst{const_cnt++, op.origin};
   } else {
     lex.cur().error("integer or slice literal or constant expected");
   }
