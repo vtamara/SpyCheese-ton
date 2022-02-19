@@ -106,7 +106,8 @@ enum Keyword {
   _Operator,
   _Infix,
   _Infixl,
-  _Infixr
+  _Infixr,
+  _Const
 };
 
 void define_keywords();
@@ -786,6 +787,30 @@ struct SymValGlobVar : sym::SymValBase {
   ~SymValGlobVar() override = default;
   TypeExpr* get_type() const {
     return sym_type;
+  }
+};
+
+struct SymValConst : sym::SymValBase {
+  td::RefInt256 intval;
+  std::string strval;
+  Keyword type;
+  SymValConst(int idx, td::RefInt256 value)
+      : sym::SymValBase(_Const, idx), intval(value) {
+    type = _Int;
+  }
+  SymValConst(int idx, std::string value)
+      : sym::SymValBase(_Const, idx), strval(value) {
+    type = _Slice;
+  }
+  ~SymValConst() override = default;
+  td::RefInt256 get_int_value() const {
+    return intval;
+  }
+  std::string get_str_value() const {
+    return strval;
+  }
+  Keyword get_type() const {
+    return type;
   }
 };
 

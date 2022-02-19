@@ -232,6 +232,47 @@ void parse_global_var_decl(Lexer& lex) {
   lex.next();
 }
 
+extern int const_cnt;
+Expr* parse_expr(Lexer& lex, CodeBlob& code, bool nv = false);
+
+void parse_const_decl(Lexer& lex) {
+  SrcLocation loc = lex.cur().loc;
+  if (lex.tp() != _Ident) {
+    lex.expect(_Ident, "constant name");
+  }
+  loc = lex.cur().loc;
+  SymDef* sym_def = sym::define_global_symbol(lex.cur().val, false, loc);
+  if (!sym_def) {
+    lex.cur().error_at("cannot define global symbol `", "`");
+  }
+  if (sym_def->value) {
+    lex.cur().error_at("global symbol `", "` already exists");
+  }
+  lex.next();
+  if (lex.tp() != '=') {
+    lex.cur().error_at("expected = instead of ", "");
+  }
+  lex.next();
+  CodeBlob code;
+  // Handles processing and resolution of literals and consts
+  auto x = parse_expr(lex, code, false); // also does lex.next() !
+  if (x->flags != Expr::_IsRvalue) {
+    lex.cur().error("expression is not strictly Rvalue");
+  }
+  if (x->cls == Expr::_Const) { // Integer constant
+    sym_def->value = new SymValConst{const_cnt++, x->intval};
+  }
+  else if (x->cls == Expr::_SliceConst) { // Slice constant (string)
+    sym_def->value = new SymValConst{const_cnt++, x->strval};
+  }
+  else if (x->cls == Expr::_Apply) {
+    lex.cur().error("precompilation of complex expressions not yet supported");
+  }
+  else {
+    lex.cur().error("integer or slice literal or constant expected");
+  }
+}
+
 FormalArgList parse_formal_args(Lexer& lex) {
   FormalArgList args;
   lex.expect('(', "formal argument list");
@@ -247,6 +288,18 @@ FormalArgList parse_formal_args(Lexer& lex) {
   }
   lex.expect(')');
   return args;
+}
+
+void parse_const_decls(Lexer& lex) {
+  lex.expect(_Const);
+  while (true) {
+    parse_const_decl(lex);
+    if (lex.tp() != ',') {
+      break;
+    }
+    lex.expect(',');
+  }
+  lex.expect(';');
 }
 
 TypeExpr* extract_total_arg_type(const FormalArgList& arg_list) {
@@ -324,8 +377,6 @@ Expr* make_func_apply(Expr* fun, Expr* x) {
   }
   return res;
 }
-
-Expr* parse_expr(Lexer& lex, CodeBlob& code, bool nv = false);
 
 // parse ( E { , E } ) | () | [ E { , E } ] | [] | id | num | _
 Expr* parse_expr100(Lexer& lex, CodeBlob& code, bool nv) {
@@ -510,6 +561,25 @@ Expr* parse_expr100(Lexer& lex, CodeBlob& code, bool nv) {
       res->e_type = val->get_type();
       res->sym = sym;
       res->flags = Expr::_IsLvalue | Expr::_IsRvalue | Expr::_IsImpure;
+      lex.next();
+      return res;
+    }
+    if (sym && dynamic_cast<SymValConst*>(sym->value)) {
+      auto val = dynamic_cast<SymValConst*>(sym->value);
+      Expr* res = new Expr{Expr::_None, lex.cur().loc};
+      res->flags = Expr::_IsRvalue;
+      if (val->type == _Int) {
+        res->cls = Expr::_Const;
+        res->intval = val->get_int_value();
+      }
+      else if (val->type == _Slice) {
+        res->cls = Expr::_SliceConst;
+        res->strval = val->get_str_value();
+      }
+      else {
+        lex.cur().error("Invalid symbolic constant type");
+      }
+      res->e_type = TypeExpr::new_atomic(val->type);
       lex.next();
       return res;
     }
@@ -1380,6 +1450,8 @@ bool parse_source(std::istream* is, src::FileDescr* fdescr) {
   while (lex.tp() != _Eof) {
     if (lex.tp() == _Global) {
       parse_global_var_decls(lex);
+    } else if (lex.tp() == _Const) {
+      parse_const_decls(lex);
     } else {
       parse_func_def(lex);
     }

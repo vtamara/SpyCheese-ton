@@ -347,6 +347,11 @@ void Op::show(std::ostream& os, const std::vector<TmpVar>& vars, std::string pfx
       show_var_list(os, left, vars);
       os << " := " << int_const << std::endl;
       break;
+    case _SliceConst:
+      os << pfx << dis << "SCONST ";
+      show_var_list(os, left, vars);
+      os << " := " << str_const << std::endl;
+      break;
     case _Import:
       os << pfx << dis << "IMPORT ";
       show_var_list(os, left, vars);

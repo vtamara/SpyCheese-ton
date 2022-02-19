@@ -1,0 +1,48 @@
+const int1 = 1, int2 = 2;
+
+const int101 = 101;
+const int111 = 111;
+
+const int1r = int1;
+
+const str1 = "const1", str2 = "aabbcc"s;
+
+const str2r = str2;
+
+const str1int = 0x636f6e737431;
+const str2int = 0xAABBCC;
+
+const nibbles = 4;
+
+int iget1() { return int1; }
+int iget2() { return int2; }
+int iget3() { return int1 + int2; }
+
+int iget1r() { return int1r; }
+
+slice sget1() { return str1; }
+slice sget2() { return str2; }
+slice sget2r() { return str2r; }
+
+builder newc() asm "NEWC";
+slice endcs(builder b) asm "ENDC" "CTOS";
+int sdeq (slice s1, slice s2) asm "SDEQ";
+builder stslicer(builder b, slice s) asm "STSLICER";
+
+_ main() {
+    int i1 = iget1();
+    int i2 = iget2();
+    int i3 = iget3();
+
+    throw_unless(int101, i1 == 1);
+    throw_unless(102, i2 == 2);
+    throw_unless(103, i3 == 3);
+
+    slice s1 = sget1();
+    slice s2 = sget2();
+    slice s3 = newc().stslicer(str1).stslicer(str2r).endcs();
+
+    throw_unless(int111, sdeq(s1, newc().store_uint(str1int, 12 * nibbles).endcs()));
+    throw_unless(112, sdeq(s2, newc().store_uint(str2int, 6 * nibbles).endcs()));
+    throw_unless(113, sdeq(s3, newc().store_uint(0x636f6e737431ABCDEF, 18 * nibbles).endcs()));
+}
