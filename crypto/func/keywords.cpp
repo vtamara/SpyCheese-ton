@@ -125,7 +125,8 @@ void define_keywords() {
       .add_keyword("operator", Kw::_Operator)
       .add_keyword("infix", Kw::_Infix)
       .add_keyword("infixl", Kw::_Infixl)
-      .add_keyword("infixr", Kw::_Infixr);
+      .add_keyword("infixr", Kw::_Infixr)
+      .add_keyword("const", Kw::_Const);
 }
 
 }  // namespace funC
