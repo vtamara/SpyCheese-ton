@@ -34,6 +34,7 @@ set(TON_CRYPTO_SOURCE
   vm/contops.cpp
   vm/dictops.cpp
   vm/debugops.cpp
+  vm/toncli-local-ops.cpp
   vm/tonops.cpp
   vm/boc.cpp
   vm/utils.cpp
@@ -84,6 +85,7 @@ set(TON_CRYPTO_SOURCE
   vm/stack.hpp
   vm/stackops.h
   vm/tupleops.h
+  vm/toncli-local-ops.h
   vm/tonops.h
   vm/vmstate.h
   vm/utils.h
