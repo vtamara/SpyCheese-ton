@@ -27,7 +27,7 @@
 
 namespace vm {
 
-int exec_gas_limit_temp(VmState* st) {
+int exec_gas_limits_temp(VmState* st) {
   VM_LOG(st) << "execute GASLIMITSTEMP";
   auto gas = st->get_gas_limits();
   Stack& stack = st->get_stack();
@@ -80,11 +80,18 @@ int exec_sign(VmState* st) {
   return 0;
 }
 
+int exec_reset_loaded_cells(VmState* st) {
+  VM_LOG(st) << "execute RESETLOADEDCELLS";
+  st->reset_loaded_cells();
+  return 0;
+}
+
 void register_toncli_local_ops(OpcodeTable& cp0) {
   using namespace std::placeholders;
-  cp0.insert(OpcodeInstr::mksimple(0xfeef10, 24, "GASLIMITSTEMP", exec_gas_limit_temp))
+  cp0.insert(OpcodeInstr::mksimple(0xfeef10, 24, "GASLIMITSTEMP", exec_gas_limits_temp))
      .insert(OpcodeInstr::mksimple(0xfeef11, 24, "PRIVTOPUB", exec_priv_to_pub))
-     .insert(OpcodeInstr::mksimple(0xfeef12, 24, "SIGN", exec_sign));
+     .insert(OpcodeInstr::mksimple(0xfeef12, 24, "SIGN", exec_sign))
+     .insert(OpcodeInstr::mksimple(0xfeef13, 24, "RESETLOADEDCELLS", exec_reset_loaded_cells));
 }
 
 }  // namespace vm
