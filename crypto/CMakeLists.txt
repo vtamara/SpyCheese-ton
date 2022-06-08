@@ -280,11 +280,13 @@ set(BIGINT_TEST_SOURCE
 add_library(ton_crypto_core STATIC ${TON_CRYPTO_CORE_SOURCE})
 target_include_directories(ton_crypto_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>)
-target_link_libraries(ton_crypto_core PUBLIC ${OPENSSL_CRYPTO_LIBRARY} tdutils tddb_utils secp256k1)
+target_link_libraries(ton_crypto_core PUBLIC ${OPENSSL_CRYPTO_LIBRARY} tdutils tddb_utils)
 if (NOT WIN32)
-  target_link_libraries(ton_crypto_core PUBLIC dl z)
+  target_link_libraries(ton_crypto_core PUBLIC dl z secp256k1)
+else()
+  target_link_libraries(ton_crypto_core PUBLIC libsecp256k1)
 endif()
-target_include_directories(ton_crypto_core SYSTEM PUBLIC $<BUILD_INTERFACE:${OPENSSL_INCLUDE_DIR}>)
+target_include_directories(ton_crypto_core SYSTEM PUBLIC $<BUILD_INTERFACE:${OPENSSL_INCLUDE_DIR}> ${SECP256K1_INCLUDE_DIR})
 
 add_library(ton_crypto STATIC ${TON_CRYPTO_SOURCE})
 target_include_directories(ton_crypto PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>

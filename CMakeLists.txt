@@ -152,6 +152,10 @@ if (USE_LIBRAPTORQ)
   add_subdirectory(third-party/libraptorq EXCLUDE_FROM_ALL)
 endif()
 
+if (DEFINED SECP256K1_LIB_DIR)
+  link_directories(${SECP256K1_LIB_DIR})
+endif()
+
 message("Add ton")
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake" ${CMAKE_MODULE_PATH})
 
