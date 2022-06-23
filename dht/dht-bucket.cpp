@@ -65,16 +65,16 @@ td::uint32 DhtBucket::active_cnt() {
   return cnt;
 }
 
-td::Status DhtBucket::add_full_node(DhtKeyId id, DhtNode newnode, td::actor::ActorId<adnl::Adnl> adnl,
+td::Status DhtBucket::add_full_node(DhtKeyId id, DhtNode newnode, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
                                     adnl::AdnlNodeIdShort self_id) {
   for (auto &node : active_nodes_) {
     if (node && node->get_key() == id) {
-      return node->update_value(std::move(newnode), adnl, self_id);
+      return node->update_value(std::move(newnode), sender, self_id);
     }
   }
   for (auto &node : backup_nodes_) {
     if (node && node->get_key() == id) {
-      return node->update_value(std::move(newnode), adnl, self_id);
+      return node->update_value(std::move(newnode), sender, self_id);
     }
   }
 
@@ -98,18 +98,18 @@ td::Status DhtBucket::add_full_node(DhtKeyId id, DhtNode newnode, td::actor::Act
   return td::Status::OK();
 }
 
-void DhtBucket::receive_ping(DhtKeyId id, DhtNode result, td::actor::ActorId<adnl::Adnl> adnl,
+void DhtBucket::receive_ping(DhtKeyId id, DhtNode result, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
                              adnl::AdnlNodeIdShort self_id) {
   for (auto &node : active_nodes_) {
     if (node && node->get_key() == id) {
-      node->receive_ping(std::move(result), adnl, self_id);
+      node->receive_ping(std::move(result), sender, self_id);
       return;
     }
   }
   for (size_t i = 0; i < backup_nodes_.size(); i++) {
     auto &node = backup_nodes_[i];
     if (node && node->get_key() == id) {
-      node->receive_ping(std::move(result), adnl, self_id);
+      node->receive_ping(std::move(result), sender, self_id);
       if (node->is_ready()) {
         promote_node(i);
       }
@@ -145,13 +145,13 @@ void DhtBucket::promote_node(size_t idx) {
   }
 }
 
-void DhtBucket::check(bool client_only, td::actor::ActorId<adnl::Adnl> adnl, td::actor::ActorId<DhtMember> dht,
-                      adnl::AdnlNodeIdShort src) {
+void DhtBucket::check(bool client_only, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
+                      td::actor::ActorId<DhtMember> dht, adnl::AdnlNodeIdShort src) {
   size_t have_space = 0;
   for (size_t i = 0; i < active_nodes_.size(); i++) {
     auto &node = active_nodes_[i];
     if (node && td::Time::now_cached() - node->last_ping_at() > ping_timeout_) {
-      node->send_ping(client_only, adnl, dht, src);
+      node->send_ping(client_only, sender, dht, src);
       if (node->ready_from() == 0) {
         demote_node(i);
       }
@@ -163,7 +163,7 @@ void DhtBucket::check(bool client_only, td::actor::ActorId<adnl::Adnl> adnl, td:
   for (size_t i = 0; i < backup_nodes_.size(); i++) {
     auto &node = backup_nodes_[i];
     if (node && td::Time::now_cached() - node->last_ping_at() > ping_timeout_) {
-      node->send_ping(client_only, adnl, dht, src);
+      node->send_ping(client_only, sender, dht, src);
     }
     if (node && have_space > 0 && node->is_ready()) {
       promote_node(i);

@@ -47,7 +47,8 @@ void DhtQuery::send_queries() {
 
     auto it = list_.find(id_xor);
     CHECK(it != list_.end());
-    td::actor::send_closure(adnl_, &adnl::Adnl::add_peer, get_src(), it->second.adnl_id(), it->second.addr_list());
+    td::actor::send_closure(sender_, &adnl::AdnlSenderInterface::add_peer, get_src(), it->second.adnl_id(),
+                            it->second.addr_list());
     send_one_query(id.to_adnl());
   }
   if (active_queries_ == 0) {
@@ -107,7 +108,7 @@ void DhtQueryFindNodes::send_one_query(adnl::AdnlNodeIdShort id) {
     td::actor::send_closure(SelfId, &DhtQueryFindNodes::on_result, std::move(R), dst);
   });
 
-  td::actor::send_closure(adnl_, &adnl::Adnl::send_query, get_src(), id, "dht findNode", std::move(Pr),
+  td::actor::send_closure(sender_, &adnl::AdnlSenderInterface::send_query, get_src(), id, "dht findNode", std::move(Pr),
                           td::Timestamp::in(2.0 + td::Random::fast(0, 20) * 0.1), std::move(B));
 }
 
@@ -145,8 +146,8 @@ void DhtQueryFindValue::send_one_query(adnl::AdnlNodeIdShort id) {
     td::actor::send_closure(SelfId, &DhtQueryFindValue::on_result, std::move(R), dst);
   });
 
-  td::actor::send_closure(adnl_, &adnl::Adnl::send_query, get_src(), id, "dht findValue", std::move(Pr),
-                          td::Timestamp::in(2.0 + td::Random::fast(0, 20) * 0.1), std::move(B));
+  td::actor::send_closure(sender_, &adnl::AdnlSenderInterface::send_query, get_src(), id, "dht findValue",
+                          std::move(Pr), td::Timestamp::in(2.0 + td::Random::fast(0, 20) * 0.1), std::move(B));
 }
 
 void DhtQueryFindValue::on_result(td::Result<td::BufferSlice> R, adnl::AdnlNodeIdShort dst) {
@@ -197,7 +198,7 @@ void DhtQueryFindValue::finish(DhtNodesList list) {
 
 DhtQueryStore::DhtQueryStore(DhtValue key_value, DhtMember::PrintId print_id, adnl::AdnlNodeIdShort src,
                              DhtNodesList list, td::uint32 k, td::uint32 a, DhtNode self, bool client_only,
-                             td::actor::ActorId<DhtMember> node, td::actor::ActorId<adnl::Adnl> adnl,
+                             td::actor::ActorId<DhtMember> node, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
                              td::Promise<td::Unit> promise)
     : print_id_(print_id)
     , k_(k)
@@ -208,7 +209,7 @@ DhtQueryStore::DhtQueryStore(DhtValue key_value, DhtMember::PrintId print_id, ad
     , self_(std::move(self))
     , client_only_(client_only) {
   node_ = node;
-  adnl_ = adnl;
+  sender_ = sender;
   src_ = src;
 }
 
@@ -219,7 +220,7 @@ void DhtQueryStore::start_up() {
 
   auto key = value_.key_id();
   auto A = td::actor::create_actor<DhtQueryFindNodes>("FindNodesQuery", key, print_id_, src_, std::move(list_), k_, a_,
-                                                      self_.clone(), client_only_, node_, adnl_, std::move(P));
+                                                      self_.clone(), client_only_, node_, sender_, std::move(P));
   A.release();
 }
 
@@ -249,8 +250,9 @@ void DhtQueryStore::send_stores(td::Result<DhtNodesList> R) {
       td::actor::send_closure(SelfId, &DhtQueryStore::store_ready, std::move(R));
     });
     auto M = create_serialize_tl_object<ton_api::dht_store>(value_.tl());
-    td::actor::send_closure(adnl_, &adnl::Adnl::send_query, src_, node.adnl_id().compute_short_id(), "dht store",
-                            std::move(P), td::Timestamp::in(2.0 + td::Random::fast(0, 20) * 0.1), std::move(M));
+    td::actor::send_closure(sender_, &adnl::AdnlSenderInterface::send_query, src_, node.adnl_id().compute_short_id(),
+                            "dht store", std::move(P), td::Timestamp::in(2.0 + td::Random::fast(0, 20) * 0.1),
+                            std::move(M));
   }
 }
 

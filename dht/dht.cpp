@@ -44,20 +44,26 @@ namespace dht {
 
 td::actor::ActorOwn<DhtMember> DhtMember::create(adnl::AdnlNodeIdShort id, std::string db_root,
                                                  td::actor::ActorId<keyring::Keyring> keyring,
-                                                 td::actor::ActorId<adnl::Adnl> adnl, td::uint32 k, td::uint32 a,
+                                                 td::actor::ActorId<adnl::Adnl> adnl,
+                                                 td::actor::ActorId<adnl::AdnlSenderInterface> sender,
+                                                 td::uint32 k, td::uint32 a,
                                                  bool client_only) {
+  if (sender.empty()) {
+    sender = adnl;
+  }
   return td::actor::ActorOwn<DhtMember>(
-      td::actor::create_actor<DhtMemberImpl>("dht", id, db_root, keyring, adnl, k, a, client_only));
+      td::actor::create_actor<DhtMemberImpl>("dht", id, db_root, keyring, adnl, sender, k, a, client_only));
 }
 
 td::Result<td::actor::ActorOwn<Dht>> Dht::create(adnl::AdnlNodeIdShort id, std::string db_root,
                                                  std::shared_ptr<DhtGlobalConfig> conf,
                                                  td::actor::ActorId<keyring::Keyring> keyring,
-                                                 td::actor::ActorId<adnl::Adnl> adnl) {
+                                                 td::actor::ActorId<adnl::Adnl> adnl,
+                                                 td::actor::ActorId<adnl::AdnlSenderInterface> sender) {
   CHECK(conf->get_k() > 0);
   CHECK(conf->get_a() > 0);
 
-  auto D = DhtMember::create(id, db_root, keyring, adnl, conf->get_k(), conf->get_a());
+  auto D = DhtMember::create(id, db_root, keyring, adnl, sender, conf->get_k(), conf->get_a());
   auto &nodes = conf->nodes();
 
   for (auto &node : nodes.list()) {
@@ -70,11 +76,12 @@ td::Result<td::actor::ActorOwn<Dht>> Dht::create(adnl::AdnlNodeIdShort id, std::
 td::Result<td::actor::ActorOwn<Dht>> Dht::create_client(adnl::AdnlNodeIdShort id, std::string db_root,
                                                         std::shared_ptr<DhtGlobalConfig> conf,
                                                         td::actor::ActorId<keyring::Keyring> keyring,
-                                                        td::actor::ActorId<adnl::Adnl> adnl) {
+                                                        td::actor::ActorId<adnl::Adnl> adnl,
+                                                        td::actor::ActorId<adnl::AdnlSenderInterface> sender) {
   CHECK(conf->get_k() > 0);
   CHECK(conf->get_a() > 0);
 
-  auto D = DhtMember::create(id, db_root, keyring, adnl, conf->get_k(), conf->get_a(), true);
+  auto D = DhtMember::create(id, db_root, keyring, adnl, sender, conf->get_k(), conf->get_a(), true);
   auto &nodes = conf->nodes();
 
   for (auto &node : nodes.list()) {
@@ -117,7 +124,7 @@ void DhtMemberImpl::start_up() {
         auto &B = buckets_[bit];
         for (auto &node : list.list()) {
           auto key = node.get_key();
-          B.add_full_node(key, std::move(node), adnl_, id_);
+          B.add_full_node(key, std::move(node), sender_, id_);
         }
       }
     }
@@ -350,7 +357,7 @@ void DhtMemberImpl::add_full_node(DhtKeyId key, DhtNode node) {
 #endif
   if (bit < 256) {
     CHECK(key.get_bit(bit) != key_.get_bit(bit));
-    buckets_[bit].add_full_node(key, std::move(node), adnl_, id_);
+    buckets_[bit].add_full_node(key, std::move(node), sender_, id_);
   } else {
     CHECK(key == key_);
   }
@@ -362,7 +369,7 @@ void DhtMemberImpl::receive_ping(DhtKeyId key, DhtNode result) {
   auto eid = key ^ key_;
   auto bit = eid.count_leading_zeroes();
   if (bit < 256) {
-    buckets_[bit].receive_ping(key, std::move(result), adnl_, id_);
+    buckets_[bit].receive_ping(key, std::move(result), sender_, id_);
   } else {
     CHECK(key == key_);
   }
@@ -385,11 +392,11 @@ void DhtMemberImpl::set_value(DhtValue value, td::Promise<td::Unit> promise) {
 
 void DhtMemberImpl::get_value_in(DhtKeyId key, td::Promise<DhtValue> result) {
   auto P = td::PromiseCreator::lambda([key, promise = std::move(result), SelfId = actor_id(this), print_id = print_id(),
-                                       adnl = adnl_, list = get_nearest_nodes(key, k_), k = k_, a = a_, id = id_,
+                                       sender = sender_, list = get_nearest_nodes(key, k_), k = k_, a = a_, id = id_,
                                        client_only = client_only_](td::Result<DhtNode> R) mutable {
     R.ensure();
     td::actor::create_actor<DhtQueryFindValue>("FindValueQuery", key, print_id, id, std::move(list), k, a,
-                                               R.move_as_ok(), client_only, SelfId, adnl, std::move(promise))
+                                               R.move_as_ok(), client_only, SelfId, sender, std::move(promise))
         .release();
   });
 
@@ -401,7 +408,7 @@ void DhtMemberImpl::check() {
                  << " fvalue=" << find_value_queries_ << " store=" << store_queries_
                  << " addrlist=" << get_addr_list_queries_;
   for (auto &bucket : buckets_) {
-    bucket.check(client_only_, adnl_, actor_id(this), id_);
+    bucket.check(client_only_, sender_, actor_id(this), id_);
   }
   if (next_save_to_db_at_.is_in_past()) {
     save_to_db();
@@ -494,14 +501,15 @@ void DhtMemberImpl::check() {
     }
 
     DhtKeyId key{x};
-    auto P = td::PromiseCreator::lambda([key, promise = std::move(promise), SelfId = actor_id(this),
-                                         print_id = print_id(), adnl = adnl_, list = get_nearest_nodes(key, k_), k = k_,
-                                         a = a_, id = id_, client_only = client_only_](td::Result<DhtNode> R) mutable {
-      R.ensure();
-      td::actor::create_actor<DhtQueryFindNodes>("FindNodesQuery", key, print_id, id, std::move(list), k, a,
-                                                 R.move_as_ok(), client_only, SelfId, adnl, std::move(promise))
-          .release();
-    });
+    auto P =
+        td::PromiseCreator::lambda([key, promise = std::move(promise), SelfId = actor_id(this), print_id = print_id(),
+                                    sender = sender_, list = get_nearest_nodes(key, k_), k = k_, a = a_, id = id_,
+                                    client_only = client_only_](td::Result<DhtNode> R) mutable {
+          R.ensure();
+          td::actor::create_actor<DhtQueryFindNodes>("FindNodesQuery", key, print_id, id, std::move(list), k, a,
+                                                     R.move_as_ok(), client_only, SelfId, sender, std::move(promise))
+              .release();
+        });
 
     get_self_node(std::move(P));
 
@@ -522,10 +530,10 @@ void DhtMemberImpl::send_store(DhtValue value, td::Promise<td::Unit> promise) {
   auto P =
       td::PromiseCreator::lambda([value = std::move(value), print_id = print_id(), id = id_, client_only = client_only_,
                                   list = get_nearest_nodes(key_id, k_), k = k_, a = a_, SelfId = actor_id(this),
-                                  adnl = adnl_, promise = std::move(promise)](td::Result<DhtNode> R) mutable {
+                                  sender = sender_, promise = std::move(promise)](td::Result<DhtNode> R) mutable {
         R.ensure();
         td::actor::create_actor<DhtQueryStore>("StoreQuery", std::move(value), print_id, id, std::move(list), k, a,
-                                               R.move_as_ok(), client_only, SelfId, adnl, std::move(promise))
+                                               R.move_as_ok(), client_only, SelfId, sender, std::move(promise))
             .release();
       });
 

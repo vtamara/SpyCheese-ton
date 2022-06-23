@@ -57,6 +57,10 @@ class AdnlSenderInterface : public td::actor::Actor {
                              td::Promise<td::BufferSlice> promise, td::Timestamp timeout, td::BufferSlice data,
                              td::uint64 max_answer_size) = 0;
   virtual void get_conn_ip_str(AdnlNodeIdShort l_id, AdnlNodeIdShort p_id, td::Promise<td::string> promise) = 0;
+
+  // adds node to peer table
+  // used mostly from DHT to avoid loops
+  virtual void add_peer(AdnlNodeIdShort local_id, AdnlNodeIdFull id, AdnlAddressList addr_list) = 0;
 };
 
 class AdnlTunnel : public td::actor::Actor {};
@@ -82,10 +86,6 @@ class Adnl : public AdnlSenderInterface {
     enum Flags : td::uint32 { direct_only = 1 };
   };
   virtual void send_message_ex(AdnlNodeIdShort src, AdnlNodeIdShort dst, td::BufferSlice data, td::uint32 flags) = 0;
-
-  // adds node to peer table
-  // used mostly from DHT to avoid loops
-  virtual void add_peer(AdnlNodeIdShort local_id, AdnlNodeIdFull id, AdnlAddressList addr_list) = 0;
 
   // adds address list for nodes from config
   virtual void add_static_nodes_from_config(AdnlNodesList nodes) = 0;

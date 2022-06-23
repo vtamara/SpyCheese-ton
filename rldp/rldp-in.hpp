@@ -101,6 +101,10 @@ class RldpIn : public RldpImpl {
   void add_id(adnl::AdnlNodeIdShort local_id) override;
   void get_conn_ip_str(adnl::AdnlNodeIdShort l_id, adnl::AdnlNodeIdShort p_id, td::Promise<td::string> promise) override;
 
+  void add_peer(adnl::AdnlNodeIdShort local_id, adnl::AdnlNodeIdFull id, adnl::AdnlAddressList addr_list) override {
+    td::actor::send_closure(adnl_, &adnl::Adnl::add_peer, local_id, std::move(id), std::move(addr_list));
+  }
+
   RldpIn(td::actor::ActorId<adnl::AdnlPeerTable> adnl) : adnl_(adnl) {
   }
 

@@ -46,7 +46,7 @@ class DhtQuery : public td::actor::Actor {
  public:
   DhtQuery(DhtKeyId key, DhtMember::PrintId print_id, adnl::AdnlNodeIdShort src, DhtNodesList list, td::uint32 k,
            td::uint32 a, DhtNode self, bool client_only, td::actor::ActorId<DhtMember> node,
-           td::actor::ActorId<adnl::Adnl> adnl)
+           td::actor::ActorId<adnl::AdnlSenderInterface> sender)
       : key_(key)
       , self_(std::move(self))
       , client_only_(client_only)
@@ -55,8 +55,8 @@ class DhtQuery : public td::actor::Actor {
       , k_(k)
       , a_(a)
       , node_(node)
-      , adnl_(adnl) {
-    add_nodes(std::move(list));
+      , sender_(sender) {
+      add_nodes(std::move(list));
   }
   DhtMember::PrintId print_id() const {
     return print_id_;
@@ -95,7 +95,7 @@ class DhtQuery : public td::actor::Actor {
   td::uint32 active_queries_ = 0;
 
  protected:
-  td::actor::ActorId<adnl::Adnl> adnl_;
+  td::actor::ActorId<adnl::AdnlSenderInterface> sender_;
 };
 
 class DhtQueryFindNodes : public DhtQuery {
@@ -105,8 +105,8 @@ class DhtQueryFindNodes : public DhtQuery {
  public:
   DhtQueryFindNodes(DhtKeyId key, DhtMember::PrintId print_id, adnl::AdnlNodeIdShort src, DhtNodesList list,
                     td::uint32 k, td::uint32 a, DhtNode self, bool client_only, td::actor::ActorId<DhtMember> node,
-                    td::actor::ActorId<adnl::Adnl> adnl, td::Promise<DhtNodesList> promise)
-      : DhtQuery(key, print_id, src, std::move(list), k, a, std::move(self), client_only, node, adnl)
+                    td::actor::ActorId<adnl::AdnlSenderInterface> sender, td::Promise<DhtNodesList> promise)
+      : DhtQuery(key, print_id, src, std::move(list), k, a, std::move(self), client_only, node, sender)
       , promise_(std::move(promise)) {
   }
   void send_one_query(adnl::AdnlNodeIdShort id) override;
@@ -124,8 +124,8 @@ class DhtQueryFindValue : public DhtQuery {
  public:
   DhtQueryFindValue(DhtKeyId key, DhtMember::PrintId print_id, adnl::AdnlNodeIdShort src, DhtNodesList list,
                     td::uint32 k, td::uint32 a, DhtNode self, bool client_only, td::actor::ActorId<DhtMember> node,
-                    td::actor::ActorId<adnl::Adnl> adnl, td::Promise<DhtValue> promise)
-      : DhtQuery(key, print_id, src, std::move(list), k, a, std::move(self), client_only, node, adnl)
+                    td::actor::ActorId<adnl::AdnlSenderInterface> sender, td::Promise<DhtValue> promise)
+      : DhtQuery(key, print_id, src, std::move(list), k, a, std::move(self), client_only, node, sender)
       , promise_(std::move(promise)) {
   }
   void send_one_query(adnl::AdnlNodeIdShort id) override;
@@ -143,7 +143,7 @@ class DhtQueryStore : public td::actor::Actor {
   td::uint32 a_;
   td::Promise<td::Unit> promise_;
   td::actor::ActorId<DhtMember> node_;
-  td::actor::ActorId<adnl::Adnl> adnl_;
+  td::actor::ActorId<adnl::AdnlSenderInterface> sender_;
   adnl::AdnlNodeIdShort src_;
   DhtValue value_;
   td::uint32 success_ = 0;
@@ -156,7 +156,7 @@ class DhtQueryStore : public td::actor::Actor {
  public:
   DhtQueryStore(DhtValue key_value, DhtMember::PrintId print_id, adnl::AdnlNodeIdShort src, DhtNodesList list,
                 td::uint32 k, td::uint32 a, DhtNode self, bool client_only, td::actor::ActorId<DhtMember> node,
-                td::actor::ActorId<adnl::Adnl> adnl, td::Promise<td::Unit> promise);
+                td::actor::ActorId<adnl::AdnlSenderInterface> sender, td::Promise<td::Unit> promise);
   void send_stores(td::Result<DhtNodesList> res);
   void store_ready(td::Result<td::BufferSlice> res);
   void start_up() override;

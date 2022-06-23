@@ -35,9 +35,9 @@ namespace ton {
 
 namespace dht {
 
-td::Status DhtRemoteNode::receive_ping(DhtNode node, td::actor::ActorId<adnl::Adnl> adnl,
+td::Status DhtRemoteNode::receive_ping(DhtNode node, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
                                        adnl::AdnlNodeIdShort self_id) {
-  TRY_STATUS(update_value(std::move(node), adnl, self_id));
+  TRY_STATUS(update_value(std::move(node), sender, self_id));
   missed_pings_ = 0;
   if (ready_from_ == 0) {
     ready_from_ = td::Time::now_cached();
@@ -45,7 +45,7 @@ td::Status DhtRemoteNode::receive_ping(DhtNode node, td::actor::ActorId<adnl::Ad
   return td::Status::OK();
 }
 
-td::Status DhtRemoteNode::update_value(DhtNode node, td::actor::ActorId<adnl::Adnl> adnl,
+td::Status DhtRemoteNode::update_value(DhtNode node, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
                                        adnl::AdnlNodeIdShort self_id) {
   CHECK(node.adnl_id() == node_.adnl_id());
   if (node.version() <= node_.version()) {
@@ -59,12 +59,12 @@ td::Status DhtRemoteNode::update_value(DhtNode node, td::actor::ActorId<adnl::Ad
                     "bad node signature: ");
 
   node_ = std::move(node);
-  td::actor::send_closure(adnl, &adnl::Adnl::add_peer, self_id, node_.adnl_id(), node_.addr_list());
+  td::actor::send_closure(sender, &adnl::AdnlSenderInterface::add_peer, self_id, node_.adnl_id(), node_.addr_list());
   return td::Status::OK();
 }
 
-void DhtRemoteNode::send_ping(bool client_only, td::actor::ActorId<adnl::Adnl> adnl, td::actor::ActorId<DhtMember> node,
-                              adnl::AdnlNodeIdShort src) {
+void DhtRemoteNode::send_ping(bool client_only, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
+                              td::actor::ActorId<DhtMember> node, adnl::AdnlNodeIdShort src) {
   missed_pings_++;
   if (missed_pings_ > max_missed_pings_ && ready_from_ > 0) {
     ready_from_ = 0;
@@ -73,15 +73,15 @@ void DhtRemoteNode::send_ping(bool client_only, td::actor::ActorId<adnl::Adnl> a
 
   last_ping_at_ = td::Time::now_cached();
 
-  td::actor::send_closure(adnl, &adnl::Adnl::add_peer, src, node_.adnl_id(), node_.addr_list());
+  td::actor::send_closure(sender, &adnl::AdnlSenderInterface::add_peer, src, node_.adnl_id(), node_.addr_list());
 
   auto P = td::PromiseCreator::lambda([key = id_, id = node_.adnl_id().compute_short_id(), client_only, node, src,
-                                       adnl](td::Result<DhtNode> R) mutable {
+                                       sender](td::Result<DhtNode> R) mutable {
     if (R.is_error()) {
       LOG(ERROR) << "[dht]: failed to get self node";
       return;
     }
-    auto P = td::PromiseCreator::lambda([key, node, adnl](td::Result<td::BufferSlice> R) {
+    auto P = td::PromiseCreator::lambda([key, node, sender](td::Result<td::BufferSlice> R) {
       if (R.is_error()) {
         VLOG(DHT_INFO) << "[dht]: received error for query to " << key << ": " << R.move_as_error();
         return;
@@ -108,7 +108,7 @@ void DhtRemoteNode::send_ping(bool client_only, td::actor::ActorId<adnl::Adnl> a
     } else {
       B = create_serialize_tl_object_suffix<ton_api::dht_query>(Q.as_slice(), R.move_as_ok().tl());
     }
-    td::actor::send_closure(adnl, &adnl::Adnl::send_query, src, id, "dht ping", std::move(P),
+    td::actor::send_closure(sender, &adnl::AdnlSenderInterface::send_query, src, id, "dht ping", std::move(P),
                             td::Timestamp::in(10.0 + td::Random::fast(0, 100) * 0.1), std::move(B));
   });
 

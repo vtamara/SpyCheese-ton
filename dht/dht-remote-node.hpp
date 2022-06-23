@@ -76,10 +76,12 @@ class DhtRemoteNode {
   double last_ping_at() const {
     return last_ping_at_;
   }
-  void send_ping(bool client_only, td::actor::ActorId<adnl::Adnl> adnl, td::actor::ActorId<DhtMember> node,
-                 adnl::AdnlNodeIdShort src);
-  td::Status receive_ping(DhtNode node, td::actor::ActorId<adnl::Adnl> adnl, adnl::AdnlNodeIdShort self_id);
-  td::Status update_value(DhtNode node, td::actor::ActorId<adnl::Adnl> adnl, adnl::AdnlNodeIdShort self_id);
+  void send_ping(bool client_only, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
+                 td::actor::ActorId<DhtMember> node, adnl::AdnlNodeIdShort src);
+  td::Status receive_ping(DhtNode node, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
+                          adnl::AdnlNodeIdShort self_id);
+  td::Status update_value(DhtNode node, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
+                          adnl::AdnlNodeIdShort self_id);
 };
 
 }  // namespace dht

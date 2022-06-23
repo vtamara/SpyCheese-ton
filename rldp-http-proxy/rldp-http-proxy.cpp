@@ -825,7 +825,7 @@ class RldpHttpProxy : public td::actor::Actor {
     }
     {
       if (is_client_) {
-        auto D = ton::dht::Dht::create_client(dht_id_, "", dht_config_, keyring_.get(), adnl_.get());
+        auto D = ton::dht::Dht::create_client(dht_id_, "", dht_config_, keyring_.get(), adnl_.get(), rldp_.get());
         D.ensure();
         dht_ = D.move_as_ok();
       } else {

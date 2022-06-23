@@ -50,11 +50,12 @@ class DhtBucket {
     backup_nodes_.resize(k);
   }
   td::uint32 active_cnt();
-  td::Status add_full_node(DhtKeyId id, DhtNode node, td::actor::ActorId<adnl::Adnl> adnl,
+  td::Status add_full_node(DhtKeyId id, DhtNode node, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
                            adnl::AdnlNodeIdShort self_id);
-  void check(bool client_only, td::actor::ActorId<adnl::Adnl> adnl, td::actor::ActorId<DhtMember> node,
+  void check(bool client_only, td::actor::ActorId<adnl::AdnlSenderInterface> sender, td::actor::ActorId<DhtMember> node,
              adnl::AdnlNodeIdShort src);
-  void receive_ping(DhtKeyId id, DhtNode result, td::actor::ActorId<adnl::Adnl> adnl, adnl::AdnlNodeIdShort self_id);
+  void receive_ping(DhtKeyId id, DhtNode result, td::actor::ActorId<adnl::AdnlSenderInterface> sender,
+                    adnl::AdnlNodeIdShort self_id);
   void get_nearest_nodes(DhtKeyId id, td::uint32 bit, DhtNodesList &vec, td::uint32 k);
   void dump(td::StringBuilder &sb) const;
   DhtNodesList export_nodes() const;

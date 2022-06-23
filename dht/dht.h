@@ -41,11 +41,12 @@ class Dht : public td::actor::Actor {
   static td::Result<td::actor::ActorOwn<Dht>> create(adnl::AdnlNodeIdShort id, std::string db_root,
                                                      std::shared_ptr<DhtGlobalConfig> conf,
                                                      td::actor::ActorId<keyring::Keyring> keyring,
-                                                     td::actor::ActorId<adnl::Adnl> adnl);
-  static td::Result<td::actor::ActorOwn<Dht>> create_client(adnl::AdnlNodeIdShort id, std::string db_root,
-                                                            std::shared_ptr<DhtGlobalConfig> conf,
-                                                            td::actor::ActorId<keyring::Keyring> keyring,
-                                                            td::actor::ActorId<adnl::Adnl> adnl);
+                                                     td::actor::ActorId<adnl::Adnl> adnl,
+                                                     td::actor::ActorId<adnl::AdnlSenderInterface> sender = {});
+  static td::Result<td::actor::ActorOwn<Dht>> create_client(
+      adnl::AdnlNodeIdShort id, std::string db_root, std::shared_ptr<DhtGlobalConfig> conf,
+      td::actor::ActorId<keyring::Keyring> keyring, td::actor::ActorId<adnl::Adnl> adnl,
+      td::actor::ActorId<adnl::AdnlSenderInterface> sender = {});
   static td::Result<std::shared_ptr<DhtGlobalConfig>> create_global_config(
       tl_object_ptr<ton_api::dht_config_global> conf);
 

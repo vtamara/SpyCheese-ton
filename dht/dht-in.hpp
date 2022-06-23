@@ -93,6 +93,7 @@ class DhtMemberImpl : public DhtMember {
 
   td::actor::ActorId<keyring::Keyring> keyring_;
   td::actor::ActorId<adnl::Adnl> adnl_;
+  td::actor::ActorId<adnl::AdnlSenderInterface> sender_;
 
   bool client_only_{false};
 
@@ -125,8 +126,17 @@ class DhtMemberImpl : public DhtMember {
 
  public:
   DhtMemberImpl(adnl::AdnlNodeIdShort id, std::string db_root, td::actor::ActorId<keyring::Keyring> keyring,
-                td::actor::ActorId<adnl::Adnl> adnl, td::uint32 k, td::uint32 a = 3, bool client_only = false)
-      : id_(id), key_{id_}, k_(k), a_(a), db_root_(db_root), keyring_(keyring), adnl_(adnl), client_only_(client_only) {
+                td::actor::ActorId<adnl::Adnl> adnl, td::actor::ActorId<adnl::AdnlSenderInterface> sender, td::uint32 k,
+                td::uint32 a = 3, bool client_only = false)
+      : id_(id)
+      , key_{id_}
+      , k_(k)
+      , a_(a)
+      , db_root_(db_root)
+      , keyring_(keyring)
+      , adnl_(adnl)
+      , sender_(sender)
+      , client_only_(client_only) {
     for (size_t i = 0; i < 256; i++) {
       buckets_.emplace_back(k_);
     }
