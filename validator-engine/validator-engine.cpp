@@ -1737,6 +1737,9 @@ void ValidatorEngine::started_dht() {
 
 void ValidatorEngine::start_rldp() {
   rldp_ = ton::rldp::Rldp::create(adnl_.get());
+  for (const auto& dht : dht_nodes_) {
+    td::actor::send_closure(rldp_, &ton::rldp::Rldp::add_id, ton::adnl::AdnlNodeIdShort{dht.first});
+  }
   started_rldp();
 }
 

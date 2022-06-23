@@ -661,6 +661,7 @@ void DhtServer::start_adnl() {
   for (auto &adnl : config_.adnl_ids) {
     add_adnl(adnl.first, adnl.second);
   }
+  rldp_ = ton::rldp::Rldp::create(adnl_.get());
   started_adnl();
 }
 
@@ -713,8 +714,10 @@ void DhtServer::started_adnl() {
 
 void DhtServer::start_dht() {
   for (auto &dht : config_.dht_ids) {
-    auto D = ton::dht::Dht::create(ton::adnl::AdnlNodeIdShort{dht}, db_root_, dht_config_, keyring_.get(), adnl_.get());
+    ton::adnl::AdnlNodeIdShort node_id_short{dht};
+    auto D = ton::dht::Dht::create(node_id_short, db_root_, dht_config_, keyring_.get(), adnl_.get());
     D.ensure();
+    td::actor::send_closure(rldp_, &ton::rldp::Rldp::add_id, node_id_short);
 
     dht_nodes_[dht] = D.move_as_ok();
     if (default_dht_node_.is_zero()) {
@@ -821,9 +824,10 @@ void DhtServer::add_dht_node(ton::PublicKeyHash key_hash, td::Promise<td::Unit> 
   }
 
   if (dht_nodes_.size() > 0) {
-    auto D =
-        ton::dht::Dht::create(ton::adnl::AdnlNodeIdShort{key_hash}, db_root_, dht_config_, keyring_.get(), adnl_.get());
+    ton::adnl::AdnlNodeIdShort node_id_short{key_hash};
+    auto D = ton::dht::Dht::create(node_id_short, db_root_, dht_config_, keyring_.get(), adnl_.get());
     D.ensure();
+    td::actor::send_closure(rldp_, &ton::rldp::Rldp::add_id, node_id_short);
 
     dht_nodes_[key_hash] = D.move_as_ok();
 

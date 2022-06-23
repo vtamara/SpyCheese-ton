@@ -26,6 +26,7 @@
     Copyright 2017-2020 Telegram Systems LLP
 */
 #include "adnl/adnl.h"
+#include "rldp/rldp.h"
 #include "dht/dht.h"
 
 #include "td/actor/MultiPromise.h"
@@ -102,6 +103,7 @@ class DhtServer : public td::actor::Actor {
   td::actor::ActorOwn<ton::keyring::Keyring> keyring_;
   td::actor::ActorOwn<ton::adnl::AdnlNetworkManager> adnl_network_manager_;
   td::actor::ActorOwn<ton::adnl::Adnl> adnl_;
+  td::actor::ActorOwn<ton::rldp::Rldp> rldp_;
   std::map<ton::PublicKeyHash, td::actor::ActorOwn<ton::dht::Dht>> dht_nodes_;
   ton::PublicKeyHash default_dht_node_ = ton::PublicKeyHash::zero();
   td::actor::ActorOwn<ton::adnl::AdnlExtServer> control_ext_server_;
