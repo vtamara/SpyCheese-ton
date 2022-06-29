@@ -37,6 +37,7 @@ set(TON_CRYPTO_SOURCE
   vm/toncli-local-ops.cpp
   vm/tonops.cpp
   vm/boc.cpp
+  vm/large-boc-serializer.cpp
   vm/utils.cpp
   vm/vm.cpp
   tl/tlblib.cpp
@@ -69,6 +70,7 @@ set(TON_CRYPTO_SOURCE
   vm/arithops.h
   vm/atom.h
   vm/boc.h
+  vm/boc-writers.h
   vm/box.hpp
   vm/cellops.h
   vm/continuation.h
