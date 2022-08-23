@@ -394,7 +394,7 @@ void AdnlPeerTableImpl::create_tunnel(AdnlNodeIdShort local_id, std::vector<Adnl
 
   td::MultiPromise mp;
   auto ig = mp.init_guard();
-  ig.add_promise([SelfId = actor_id(this), entry = nodes[0], pubkeys = std::move(pubkeys),
+  ig.add_promise([SelfId = actor_id(this), entry = nodes[0], pubkeys,
                   local_id, promise = std::move(promise)](td::Result<td::Unit> R) mutable {
     if (R.is_error()) {
       LOG(WARNING) << "cannot create tunnel: " << R.error();
