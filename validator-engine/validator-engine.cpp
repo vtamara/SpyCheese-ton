@@ -1680,7 +1680,7 @@ void ValidatorEngine::start_adnl() {
 
   td::actor::send_closure(adnl_, &ton::adnl::Adnl::add_static_nodes_from_config, std::move(adnl_static_nodes_));
   for (const auto& id : config_.adnl_tunnel_servers) {
-    td::actor::send_closure(adnl_, &ton::adnl::Adnl::create_tunnel_server, id);
+    td::actor::send_closure(adnl_, &ton::adnl::Adnl::create_tunnel_midpoint_server, id);
   }
   started_adnl();
 }

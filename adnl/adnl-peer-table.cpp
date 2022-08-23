@@ -20,6 +20,7 @@
 #include "adnl-peer.h"
 #include "adnl-channel.h"
 #include "utils.hpp"
+#include "td/actor/MultiPromise.h"
 
 #include "td/utils/tl_storers.h"
 #include "td/utils/crypto.h"
@@ -372,16 +373,72 @@ void AdnlPeerTableImpl::create_ext_server(std::vector<AdnlNodeIdShort> ids, std:
   promise.set_value(AdnlExtServerCreator::create(actor_id(this), std::move(ids), std::move(ports)));
 }
 
-void AdnlPeerTableImpl::create_tunnel(AdnlNodeIdShort dst, td::uint32 size,
-                                      td::Promise<std::pair<td::actor::ActorOwn<AdnlTunnel>, AdnlAddress>> promise) {
-}
-
-void AdnlPeerTableImpl::create_tunnel_server(AdnlNodeIdShort id) {
-  if (tunnel_servers_.count(id)) {
-    LOG(WARNING) << "duplicate adnl tunnel server id " << id;
+void AdnlPeerTableImpl::create_tunnel(AdnlNodeIdShort local_id, std::vector<AdnlNodeIdShort> nodes,
+                                      td::Promise<AdnlAddress> promise) {
+  if (nodes.empty()) {
+    LOG(WARNING) << "cannot create tunnel: empty nodes";
+    promise.set_error(td::Status::Error(ErrorCode::notready, "cannot create tunnel: empty nodes"));
     return;
   }
-  tunnel_servers_[id] = td::actor::create_actor<AdnlTunnelServer>("adnltunnelserver", id, keyring_, actor_id(this));
+  if (!local_ids_.count(local_id)) {
+    LOG(WARNING) << "cannot create tunnel: unknown local id " << local_id;
+    promise.set_error(td::Status::Error(ErrorCode::notready, "cannot create tunnel: unknown local id"));
+    return;
+  }
+  std::vector<PublicKey> pubkeys;
+  for (size_t i = 0; i < nodes.size() + 1; ++i) {
+    auto private_key = ton::PrivateKey{ton::privkeys::Ed25519::random()};
+    pubkeys.push_back(private_key.compute_public_key());
+    td::actor::send_closure(keyring_, &ton::keyring::Keyring::add_key, std::move(private_key), true, [](td::Unit) {});
+  }
+
+  td::MultiPromise mp;
+  auto ig = mp.init_guard();
+  ig.add_promise([SelfId = actor_id(this), entry = nodes[0], pubkeys = std::move(pubkeys),
+                  local_id, promise = std::move(promise)](td::Result<td::Unit> R) mutable {
+    if (R.is_error()) {
+      LOG(WARNING) << "cannot create tunnel: " << R.error();
+      promise.set_error(R.move_as_error());
+      return;
+    }
+    td::actor::send_closure(SelfId, &AdnlPeerTableImpl::create_tunnel_cont, local_id, entry, std::move(pubkeys),
+                            std::move(promise));
+  });
+
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    td::Promise<td::BufferSlice> P = [promise = ig.get_promise()](td::Result<td::BufferSlice> R) mutable {
+      if (R.is_error()) {
+        promise.set_error(R.move_as_error());
+      } else {
+        promise.set_result(td::Unit());
+      }
+    };
+    td::BufferSlice query = create_serialize_tl_object<ton_api::adnl_tunnel_createMidpoint>(
+        pubkeys[i + 1].tl(), (i == nodes.size() ? local_id : nodes[i + 1]).bits256_value(),
+        pubkeys[i].compute_short_id().bits256_value(), create_tl_object<ton_api::adnl_tunnel_queryToPrevNone>());
+    send_query(local_id, nodes[i], "createmidpoint", std::move(P), td::Timestamp::in(5.0), std::move(query));
+  }
+}
+
+void AdnlPeerTableImpl::create_tunnel_cont(AdnlNodeIdShort local_id, AdnlNodeIdShort entry,
+                                           std::vector<PublicKey> pubkeys, td::Promise<AdnlAddress> promise) {
+  if (!tunnel_servers_.count(local_id)) {
+    tunnel_servers_[local_id] =
+        td::actor::create_actor<AdnlTunnelServer>("adnltunnelserver", local_id, keyring_, actor_id(this));
+  }
+  std::vector<PublicKeyHash> decrypt_via;
+  for (size_t i = 0; i < pubkeys.size(); ++i) {
+    decrypt_via.push_back(pubkeys[pubkeys.size() - 1 - i].compute_short_id());
+  }
+  td::actor::send_closure(tunnel_servers_[local_id], &AdnlTunnelServer::add_endpoint, std::move(decrypt_via));
+  promise.set_result(td::Ref<AdnlAddressTunnel>(true, entry, pubkeys[0]));
+}
+
+void AdnlPeerTableImpl::create_tunnel_midpoint_server(AdnlNodeIdShort id) {
+  if (!tunnel_servers_.count(id)) {
+    tunnel_servers_[id] = td::actor::create_actor<AdnlTunnelServer>("adnltunnelserver", id, keyring_, actor_id(this));
+  }
+  td::actor::send_closure(tunnel_servers_[id], &AdnlTunnelServer::set_midpoint_server_enabled);
 }
 
 void AdnlPeerTableImpl::get_conn_ip_str(AdnlNodeIdShort l_id, AdnlNodeIdShort p_id, td::Promise<td::string> promise) {

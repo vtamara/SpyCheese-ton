@@ -22,13 +22,7 @@ namespace ton {
 
 namespace adnl {
 
-static const std::vector<std::string> PREFIXES = {
-    Adnl::int_to_bytestring(ton_api::adnl_tunnel_packetPrefix::ID),
-    Adnl::int_to_bytestring(ton_api::adnl_tunnel_createMidpoint::ID),
-    Adnl::int_to_bytestring(ton_api::adnl_tunnel_encryptedQuery::ID)
-};
-
-void AdnlTunnelServer::start_up() {
+std::unique_ptr<Adnl::Callback> AdnlTunnelServer::create_callback() {
   class Callback : public Adnl::Callback {
    public:
     Callback(td::actor::ActorId<AdnlTunnelServer> id) : id_(id) {
@@ -40,18 +34,38 @@ void AdnlTunnelServer::start_up() {
                        td::Promise<td::BufferSlice> promise) override {
       td::actor::send_closure(id_, &AdnlTunnelServer::receive_query, std::move(data), std::move(promise));
     }
+
    private:
     td::actor::ActorId<AdnlTunnelServer> id_;
   };
-  for (const auto &x : PREFIXES) {
-    td::actor::send_closure(adnl_, &Adnl::subscribe, local_id_, x, std::make_unique<Callback>(actor_id(this)));
-  }
+  return std::make_unique<Callback>(actor_id(this));
+}
+
+void AdnlTunnelServer::start_up() {
+  td::actor::send_closure(adnl_, &Adnl::subscribe, local_id_,
+                          Adnl::int_to_bytestring(ton_api::adnl_tunnel_packetPrefix::ID), create_callback());
 }
 
 void AdnlTunnelServer::tear_down() {
-  for (const auto &x : PREFIXES) {
-    td::actor::send_closure(adnl_, &Adnl::unsubscribe, local_id_, x);
+  td::actor::send_closure(adnl_, &Adnl::unsubscribe, local_id_,
+                          Adnl::int_to_bytestring(ton_api::adnl_tunnel_packetPrefix::ID));
+  if (midpoint_server_enabled_) {
+    td::actor::send_closure(adnl_, &Adnl::unsubscribe, local_id_,
+                            Adnl::int_to_bytestring(ton_api::adnl_tunnel_createMidpoint::ID));
+    td::actor::send_closure(adnl_, &Adnl::unsubscribe, local_id_,
+                            Adnl::int_to_bytestring(ton_api::adnl_tunnel_encryptedQuery::ID));
   }
+}
+
+void AdnlTunnelServer::set_midpoint_server_enabled() {
+  if (midpoint_server_enabled_) {
+    return;
+  }
+  midpoint_server_enabled_ = true;
+  td::actor::send_closure(adnl_, &Adnl::subscribe, local_id_,
+                          Adnl::int_to_bytestring(ton_api::adnl_tunnel_createMidpoint::ID), create_callback());
+  td::actor::send_closure(adnl_, &Adnl::subscribe, local_id_,
+                          Adnl::int_to_bytestring(ton_api::adnl_tunnel_encryptedQuery::ID), create_callback());
 }
 
 void AdnlTunnelServer::receive_message(AdnlNodeIdShort src, td::BufferSlice data) {
@@ -65,7 +79,7 @@ void AdnlTunnelServer::receive_message(AdnlNodeIdShort src, td::BufferSlice data
     LOG(DEBUG) << "dropping message with unknown id " << id << " from " << src;
     return;
   }
-  td::actor::send_closure(it->second, &AdnlInboundTunnelMidpoint::receive_packet, src, td::IPAddress(), std::move(data));
+  td::actor::send_closure(it->second, &AdnlInboundTunnelPoint::receive_packet, src, td::IPAddress(), std::move(data));
 }
 
 void AdnlTunnelServer::receive_query(td::BufferSlice data, td::Promise<td::BufferSlice> promise) {
@@ -104,6 +118,16 @@ void AdnlTunnelServer::receive_query(td::BufferSlice data, td::Promise<td::Buffe
                 td::Timestamp::in(10.0),
                 create_serialize_tl_object<ton_api::adnl_tunnel_encryptedQuery>(std::move(obj.data_)));
           }));
+}
+
+void AdnlTunnelServer::add_endpoint(std::vector<PublicKeyHash> decrypt_via) {
+  CHECK(!decrypt_via.empty());
+  td::Bits256 id = decrypt_via[0].bits256_value();
+  if (tunnels_.count(id)) {
+    return;
+  }
+  tunnels_[id] =
+      td::actor::create_actor<AdnlInboundTunnelEndpoint>("adnltunnelendpoint", std::move(decrypt_via), keyring_, adnl_);
 }
 
 }  // namespace adnl

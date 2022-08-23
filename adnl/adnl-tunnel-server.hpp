@@ -33,12 +33,17 @@ class AdnlTunnelServer : public td::actor::Actor {
   void start_up() override;
   void tear_down() override;
 
+  void set_midpoint_server_enabled();
+  void add_endpoint(std::vector<PublicKeyHash> decrypt_via);
+
  private:
   AdnlNodeIdShort local_id_;
   td::actor::ActorId<keyring::Keyring> keyring_;
   td::actor::ActorId<AdnlPeerTable> adnl_;
-  std::map<td::Bits256, td::actor::ActorOwn<AdnlInboundTunnelMidpoint>> tunnels_;
+  std::map<td::Bits256, td::actor::ActorOwn<AdnlInboundTunnelPoint>> tunnels_;
+  bool midpoint_server_enabled_ = false;
 
+  std::unique_ptr<Adnl::Callback> create_callback();
   void receive_message(AdnlNodeIdShort src, td::BufferSlice data);
   void receive_query(td::BufferSlice data, td::Promise<td::BufferSlice> promise);
 };

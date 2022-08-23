@@ -36,13 +36,9 @@ class AdnlInboundTunnelPoint : public AdnlTunnel {
 
 class AdnlInboundTunnelEndpoint : public AdnlInboundTunnelPoint {
  public:
-  AdnlInboundTunnelEndpoint(PublicKeyHash pubkey_hash, std::vector<PublicKeyHash> decrypt_via, AdnlNodeIdShort proxy_to,
-                            td::actor::ActorId<keyring::Keyring> keyring, td::actor::ActorId<AdnlPeerTable> adnl)
-      : pubkey_hash_(std::move(pubkey_hash))
-      , decrypt_via_(std::move(decrypt_via))
-      , proxy_to_(std::move(proxy_to))
-      , keyring_(std::move(keyring))
-      , adnl_(std::move(adnl)) {
+  AdnlInboundTunnelEndpoint(std::vector<PublicKeyHash> decrypt_via, td::actor::ActorId<keyring::Keyring> keyring,
+                            td::actor::ActorId<AdnlPeerTable> adnl)
+      : decrypt_via_(std::move(decrypt_via)), keyring_(std::move(keyring)), adnl_(std::move(adnl)) {
   }
 
   void receive_packet(AdnlNodeIdShort src, td::IPAddress src_addr, td::BufferSlice datagram) override;
@@ -50,9 +46,7 @@ class AdnlInboundTunnelEndpoint : public AdnlInboundTunnelPoint {
   void decrypted_packet(AdnlNodeIdShort src, td::IPAddress src_addr, td::BufferSlice data, size_t idx);
 
  private:
-  PublicKeyHash pubkey_hash_;
   std::vector<PublicKeyHash> decrypt_via_;
-  AdnlNodeIdShort proxy_to_;
   td::actor::ActorId<keyring::Keyring> keyring_;
   td::actor::ActorId<AdnlPeerTable> adnl_;
 };

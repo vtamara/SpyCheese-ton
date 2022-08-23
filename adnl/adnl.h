@@ -116,10 +116,10 @@ class Adnl : public AdnlSenderInterface {
 
   virtual void create_ext_server(std::vector<AdnlNodeIdShort> ids, std::vector<td::uint16> ports,
                                  td::Promise<td::actor::ActorOwn<AdnlExtServer>> promise) = 0;
-  virtual void create_tunnel(AdnlNodeIdShort dst, td::uint32 size,
-                             td::Promise<std::pair<td::actor::ActorOwn<AdnlTunnel>, AdnlAddress>> promise) = 0;
+  virtual void create_tunnel(AdnlNodeIdShort local_id, std::vector<AdnlNodeIdShort> nodes,
+                             td::Promise<AdnlAddress> promise) = 0;
 
-  virtual void create_tunnel_server(AdnlNodeIdShort id) = 0;
+  virtual void create_tunnel_midpoint_server(AdnlNodeIdShort id) = 0;
 
   static td::actor::ActorOwn<Adnl> create(std::string db, td::actor::ActorId<keyring::Keyring> keyring);
 
