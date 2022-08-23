@@ -376,6 +376,14 @@ void AdnlPeerTableImpl::create_tunnel(AdnlNodeIdShort dst, td::uint32 size,
                                       td::Promise<std::pair<td::actor::ActorOwn<AdnlTunnel>, AdnlAddress>> promise) {
 }
 
+void AdnlPeerTableImpl::create_tunnel_server(AdnlNodeIdShort id) {
+  if (tunnel_servers_.count(id)) {
+    LOG(WARNING) << "duplicate adnl tunnel server id " << id;
+    return;
+  }
+  tunnel_servers_[id] = td::actor::create_actor<AdnlTunnelServer>("adnltunnelserver", id, keyring_, actor_id(this));
+}
+
 void AdnlPeerTableImpl::get_conn_ip_str(AdnlNodeIdShort l_id, AdnlNodeIdShort p_id, td::Promise<td::string> promise) {
   auto it = peers_.find(p_id);
   if (it == peers_.end()) {

@@ -31,6 +31,8 @@ set(ADNL_HEADERS
   adnl-proxy-types.hpp
   adnl.h
   utils.hpp
+  adnl-tunnel-server.hpp
+  adnl-tunnel.h
 )
 set(ADNL_SOURCE
   adnl-address-list.cpp
@@ -51,8 +53,9 @@ set(ADNL_SOURCE
   adnl-static-nodes.cpp
   adnl-proxy-types.cpp
   utils.cpp
-  ${ADNL_HEADERS}
-)
+  adnl-tunnel-server.cpp
+  adnl-tunnel.cpp
+  ${ADNL_HEADERS})
 
 set(ADNL_TEST_SOURCE
   adnl-test-loopback-implementation.h

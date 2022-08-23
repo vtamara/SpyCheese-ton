@@ -139,7 +139,15 @@ adnl.message.answer query_id:int256 answer:bytes = adnl.Message;
 
 adnl.message.part hash:int256 total_size:int offset:int data:bytes = adnl.Message;
 
+adnl.tunnel.packetPrefix id:int256 = adnl.tunnel.PacketPrefix;
+adnl.tunnel.queryToPrev addr:int256 data:bytes = adnl.tunnel.QueryToPrev;
+adnl.tunnel.queryToPrevNone = adnl.tunnel.QueryToPrev;
+
 ---functions---
+
+adnl.tunnel.createMidpoint encrypt_via:PublicKey proxy_to:int256 message_prefix:int256 query_to_prev:adnl.tunnel.QueryToPrev = tonNode.Success;
+adnl.tunnel.encryptedQuery data:bytes = tonNode.Success;
+
 ---types---
 
 adnl.db.node.key local_id:int256 peer_id:int256 = adnl.db.Key;
@@ -585,7 +593,8 @@ engine.validator.config out_port:int addrs:(vector engine.Addr) adnl:(vector eng
         validators:(vector engine.validator) fullnode:int256 fullnodeslaves:(vector engine.validator.fullNodeSlave)
         fullnodemasters:(vector engine.validator.fullNodeMaster)
         liteservers:(vector engine.liteServer) control:(vector engine.controlInterface)
-        gc:engine.gc = engine.validator.Config; 
+        gc:engine.gc
+        adnl_tunnel_servers:(vector adnl.id.Short) = engine.validator.Config;
 
 ---functions---
 ---types---

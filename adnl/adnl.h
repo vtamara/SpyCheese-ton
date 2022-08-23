@@ -119,6 +119,8 @@ class Adnl : public AdnlSenderInterface {
   virtual void create_tunnel(AdnlNodeIdShort dst, td::uint32 size,
                              td::Promise<std::pair<td::actor::ActorOwn<AdnlTunnel>, AdnlAddress>> promise) = 0;
 
+  virtual void create_tunnel_server(AdnlNodeIdShort id) = 0;
+
   static td::actor::ActorOwn<Adnl> create(std::string db, td::actor::ActorId<keyring::Keyring> keyring);
 
   static std::string int_to_bytestring(td::int32 id) {

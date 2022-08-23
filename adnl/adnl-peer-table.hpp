@@ -31,6 +31,7 @@
 #include "adnl-static-nodes.h"
 #include "adnl-ext-server.h"
 #include "adnl-address-list.h"
+#include "adnl-tunnel-server.hpp"
 
 namespace ton {
 
@@ -102,6 +103,7 @@ class AdnlPeerTableImpl : public AdnlPeerTable {
 
   void create_tunnel(AdnlNodeIdShort dst, td::uint32 size,
                      td::Promise<std::pair<td::actor::ActorOwn<AdnlTunnel>, AdnlAddress>> promise) override;
+  void create_tunnel_server(AdnlNodeIdShort id) override;
   void get_conn_ip_str(AdnlNodeIdShort l_id, AdnlNodeIdShort p_id, td::Promise<td::string> promise) override;
 
   struct PrintId {};
@@ -134,6 +136,8 @@ class AdnlPeerTableImpl : public AdnlPeerTable {
   AdnlNodeIdShort proxy_addr_;
   //std::map<td::uint64, td::actor::ActorId<AdnlQuery>> out_queries_;
   //td::uint64 last_query_id_ = 1;
+
+  std::map<AdnlNodeIdShort, td::actor::ActorOwn<AdnlTunnelServer>> tunnel_servers_;
 };
 
 inline td::StringBuilder &operator<<(td::StringBuilder &sb, const AdnlPeerTableImpl::PrintId &id) {

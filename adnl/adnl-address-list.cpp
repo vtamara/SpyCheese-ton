@@ -67,11 +67,8 @@ class AdnlNetworkConnectionTunnel : public AdnlNetworkConnection {
       return;
     }
     auto data = dataR.move_as_ok();
-    td::BufferSlice enc_message{data.size() + 32};
-    auto S = enc_message.as_slice();
-    S.copy_from(pub_key_hash_.as_slice());
-    S.remove_prefix(32);
-    S.copy_from(data.as_slice());
+    td::BufferSlice enc_message = create_serialize_tl_object_suffix<ton_api::adnl_tunnel_packetPrefix>(
+        data.as_slice(), pub_key_hash_.bits256_value());
     td::actor::send_closure(adnl_, &Adnl::send_message_ex, src, adnl_id_, std::move(enc_message),
                             Adnl::SendFlags::direct_only);
   }

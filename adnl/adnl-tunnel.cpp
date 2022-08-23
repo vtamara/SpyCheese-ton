@@ -29,15 +29,15 @@ void AdnlInboundTunnelEndpoint::receive_packet(AdnlNodeIdShort src, td::IPAddres
 
 void AdnlInboundTunnelEndpoint::receive_packet_cont(AdnlNodeIdShort src, td::IPAddress src_addr,
                                                     td::BufferSlice datagram, size_t idx) {
-  if (datagram.size() <= 32) {
-    VLOG(ADNL_INFO) << "dropping too short datagram";
+  auto prefix = fetch_tl_prefix<ton_api::adnl_tunnel_packetPrefix>(datagram, true);
+  if (prefix.is_error()) {
+    VLOG(ADNL_INFO) << "dropping datagram with invalid prefix";
     return;
   }
-  if (datagram.as_slice().truncate(32) != decrypt_via_[idx].as_slice()) {
+  if (prefix.ok()->id_ != decrypt_via_[idx].bits256_value()) {
     VLOG(ADNL_INFO) << "invalid tunnel midpoint";
     return;
   }
-  datagram.confirm_read(32);
 
   auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), src, src_addr, idx](td::Result<td::BufferSlice> R) {
     if (R.is_error()) {
@@ -54,7 +54,9 @@ void AdnlInboundTunnelEndpoint::receive_packet_cont(AdnlNodeIdShort src, td::IPA
 void AdnlInboundTunnelEndpoint::decrypted_packet(AdnlNodeIdShort src, td::IPAddress src_addr, td::BufferSlice data,
                                                  size_t idx) {
   if (idx == decrypt_via_.size() - 1) {
-    td::actor::send_closure(adnl_, &AdnlPeerTable::receive_packet, src_addr, std::move(data));
+    AdnlCategoryMask cat_mask;
+    cat_mask.set();
+    td::actor::send_closure(adnl_, &AdnlPeerTable::receive_packet, src_addr, cat_mask, std::move(data));
     return;
   }
   auto F = fetch_tl_object<ton_api::adnl_tunnelPacketContents>(std::move(data), true);
@@ -101,11 +103,8 @@ void AdnlInboundTunnelMidpoint::receive_packet(AdnlNodeIdShort src, td::IPAddres
     return;
   }
   auto data = dataR.move_as_ok();
-  td::BufferSlice enc{data.size() + 32};
-  auto S = enc.as_slice();
-  S.copy_from(encrypt_key_hash_.as_slice());
-  S.remove_prefix(32);
-  S.copy_from(data.as_slice());
+  td::BufferSlice enc = create_serialize_tl_object_suffix<ton_api::adnl_tunnel_packetPrefix>(
+      data.as_slice(), encrypt_key_hash_.bits256_value());
 
   td::actor::send_closure(adnl_, &Adnl::send_message_ex, proxy_as_, proxy_to_, std::move(enc),
                           Adnl::SendFlags::direct_only);

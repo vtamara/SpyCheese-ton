@@ -152,6 +152,7 @@ ton::tl_object_ptr<ton::ton_api::engine_validator_config> Config::tl() const {
   std::vector<ton::tl_object_ptr<ton::ton_api::engine_validator_fullNodeMaster>> full_node_masters_vec;
 
   std::vector<ton::tl_object_ptr<ton::ton_api::engine_liteServer>> liteserver_vec;
+  std::vector<ton::tl_object_ptr<ton::ton_api::adnl_id_short>> tunnel_vec;
 
   std::vector<ton::tl_object_ptr<ton::ton_api::engine_controlInterface>> control_vec;
   for (auto &x : controls) {
@@ -170,7 +171,7 @@ ton::tl_object_ptr<ton::ton_api::engine_validator_config> Config::tl() const {
   return ton::create_tl_object<ton::ton_api::engine_validator_config>(
       out_port, std::move(addrs_vec), std::move(adnl_vec), std::move(dht_vec), std::move(val_vec),
       ton::PublicKeyHash::zero().tl(), std::move(full_node_slaves_vec), std::move(full_node_masters_vec),
-      std::move(liteserver_vec), std::move(control_vec), std::move(gc_vec));
+      std::move(liteserver_vec), std::move(control_vec), std::move(gc_vec), std::move(tunnel_vec));
 }
 
 td::Result<bool> Config::config_add_network_addr(td::IPAddress in_ip, td::IPAddress out_ip,
