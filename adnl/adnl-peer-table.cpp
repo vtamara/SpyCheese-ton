@@ -414,7 +414,7 @@ void AdnlPeerTableImpl::create_tunnel(AdnlNodeIdShort local_id, std::vector<Adnl
       }
     };
     td::BufferSlice query = create_serialize_tl_object<ton_api::adnl_tunnel_createMidpoint>(
-        pubkeys[i + 1].tl(), (i == nodes.size() ? local_id : nodes[i + 1]).bits256_value(),
+        pubkeys[i + 1].tl(), (i == nodes.size() - 1 ? local_id : nodes[i + 1]).bits256_value(),
         pubkeys[i].compute_short_id().bits256_value(), create_tl_object<ton_api::adnl_tunnel_queryToPrevNone>());
     send_query(local_id, nodes[i], "createmidpoint", std::move(P), td::Timestamp::in(5.0), std::move(query));
   }
