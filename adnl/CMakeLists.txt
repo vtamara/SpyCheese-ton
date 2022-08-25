@@ -32,6 +32,7 @@ set(ADNL_HEADERS
   adnl.h
   utils.hpp
   adnl-tunnel-server.hpp
+  adnl-hop.hpp
   adnl-tunnel.h
 )
 set(ADNL_SOURCE
@@ -54,6 +55,7 @@ set(ADNL_SOURCE
   adnl-proxy-types.cpp
   utils.cpp
   adnl-tunnel-server.cpp
+  adnl-hop.cpp
   adnl-tunnel.cpp
   ${ADNL_HEADERS})
 

@@ -26,6 +26,7 @@
 #include "td/actor/PromiseFuture.h"
 #include "adnl-network-manager.h"
 #include "adnl-received-mask.h"
+#include "adnl-hop.hpp"
 
 #include <map>
 
@@ -65,6 +66,10 @@ class AdnlNetworkManagerImpl : public AdnlNetworkManager {
       return proxy_addr == with.proxy_addr && proxy->id() == with.proxy->id();
     }
   };
+  struct OutDescHop {
+    AdnlCategoryMask cat_mask{0};
+    td::actor::ActorOwn<AdnlHopClient> hop_client;
+  };
   struct InDesc {
     td::uint16 port;
     std::shared_ptr<AdnlProxy> proxy;
@@ -97,6 +102,7 @@ class AdnlNetworkManagerImpl : public AdnlNetworkManager {
   };
 
   OutDesc *choose_out_iface(td::uint8 cat, td::uint32 priority);
+  OutDescHop *choose_out_iface_hop(td::uint8 cat, td::uint32 priority);
 
   AdnlNetworkManagerImpl(td::uint16 out_udp_port) : out_udp_port_(out_udp_port) {
   }
@@ -130,6 +136,8 @@ class AdnlNetworkManagerImpl : public AdnlNetworkManager {
   void add_self_addr(td::IPAddress addr, AdnlCategoryMask cat_mask, td::uint32 priority) override;
   void add_proxy_addr(td::IPAddress addr, td::uint16 local_port, std::shared_ptr<AdnlProxy> proxy,
                       AdnlCategoryMask cat_mask, td::uint32 priority) override;
+  void add_hop_addr(td::actor::ActorOwn<AdnlHopClient> hop_client, AdnlCategoryMask cat_mask,
+                    td::uint32 priority) override;
   void send_udp_packet(AdnlNodeIdShort src_id, AdnlNodeIdShort dst_id, td::IPAddress dst_addr, td::uint32 priority,
                        td::BufferSlice data) override;
 
@@ -149,6 +157,7 @@ class AdnlNetworkManagerImpl : public AdnlNetworkManager {
   std::unique_ptr<Callback> callback_;
 
   std::map<td::uint32, std::vector<OutDesc>> out_desc_;
+  std::map<td::uint32, std::vector<OutDescHop>> out_desc_hop_;
   std::vector<InDesc> in_desc_;
   std::map<td::Bits256, size_t> proxy_addrs_;
 

@@ -143,6 +143,10 @@ adnl.tunnel.packetPrefix id:int256 = adnl.tunnel.PacketPrefix;
 adnl.tunnel.queryToPrev addr:int256 data:bytes = adnl.tunnel.QueryToPrev;
 adnl.tunnel.queryToPrevNone = adnl.tunnel.QueryToPrev;
 
+adnl.hop.forwardToUdp flags:# ipv4:flags.0?int ipv6:flags.1?int128 port:int data:bytes = adnl.hop.Message;
+adnl.hop.forwardToHop dst:int256 encrypted_data:bytes = adnl.hop.Message;
+adnl.hop.encryptedMessage data:bytes = adnl.hop.Message;
+
 ---functions---
 
 adnl.tunnel.createMidpoint encrypt_via:PublicKey proxy_to:int256 message_prefix:int256 query_to_prev:adnl.tunnel.QueryToPrev = tonNode.Success;

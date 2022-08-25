@@ -66,7 +66,8 @@ class AdnlPacket {
     f_reinit_date = 0x400,
     f_signature = 0x800,
     f_priority = 0x1000,
-    f_all = 0x1fff
+    f_ignore_remote_addr = 0x2000,
+    f_all = 0x3fff
   };
 
  public:
@@ -135,6 +136,9 @@ class AdnlPacket {
   auto remote_addr() const {
     return remote_addr_;
   }
+  bool ignore_remote_addr() const {
+    return flags_ & Flags::f_ignore_remote_addr;
+  }
 
   void init_random();
 
@@ -189,6 +193,9 @@ class AdnlPacket {
     reinit_date_ = date;
     dst_reinit_date_ = dst_reinit_date;
     flags_ |= Flags::f_reinit_date;
+  }
+  void set_ignore_remote_addr() {
+    flags_ |= Flags::f_ignore_remote_addr;
   }
 
   void set_remote_addr(td::IPAddress addr) {

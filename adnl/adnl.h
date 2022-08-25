@@ -34,7 +34,7 @@ class Dht;
 
 namespace adnl {
 
-enum class AdnlLocalIdMode : td::uint32 { direct_only = 1, drop_from_net = 2 };
+enum class AdnlLocalIdMode : td::uint32 { direct_only = 1, drop_from_net = 2, send_ignore_remote_addr = 4 };
 
 class AdnlNetworkManager;
 

@@ -132,7 +132,7 @@ void AdnlPeerPairImpl::receive_packet_checked(AdnlPacket packet) {
   if (packet.dst_reinit_date() > 0 && packet.dst_reinit_date() < d) {
     if (!packet.addr_list().empty()) {
       auto addr_list = packet.addr_list();
-      if (packet.remote_addr().is_valid() && addr_list.size() == 0) {
+      if (!packet.ignore_remote_addr() && packet.remote_addr().is_valid() && addr_list.size() == 0) {
         VLOG(ADNL_DEBUG) << "adding implicit address " << packet.remote_addr();
         addr_list.add_udp_address(packet.remote_addr());
       }
@@ -183,7 +183,7 @@ void AdnlPeerPairImpl::receive_packet_checked(AdnlPacket packet) {
 
   if (!packet.addr_list().empty()) {
     auto addr_list = packet.addr_list();
-    if (packet.remote_addr().is_valid() && addr_list.size() == 0) {
+    if (!packet.ignore_remote_addr() && packet.remote_addr().is_valid() && addr_list.size() == 0) {
       VLOG(ADNL_DEBUG) << "adding implicit address " << packet.remote_addr();
       addr_list.add_udp_address(packet.remote_addr());
     }
@@ -288,6 +288,9 @@ void AdnlPeerPairImpl::send_messages_in(std::vector<OutboundAdnlMessage> message
       }
       if (!priority_addr_list_.empty()) {
         packet.set_received_priority_addr_list_version(priority_addr_list_.version());
+      }
+      if (mode_ & (td::uint32)AdnlLocalIdMode::send_ignore_remote_addr) {
+        packet.set_ignore_remote_addr();
       }
 
       while (ptr < messages.size()) {

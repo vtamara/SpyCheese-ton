@@ -48,6 +48,23 @@ AdnlNetworkManagerImpl::OutDesc *AdnlNetworkManagerImpl::choose_out_iface(td::ui
   }
 }
 
+AdnlNetworkManagerImpl::OutDescHop *AdnlNetworkManagerImpl::choose_out_iface_hop(td::uint8 cat, td::uint32 priority) {
+  auto it = out_desc_hop_.upper_bound(priority);
+  while (true) {
+    if (it == out_desc_hop_.begin()) {
+      return nullptr;
+    }
+    it--;
+
+    auto &v = it->second;
+    for (auto &x : v) {
+      if (x.cat_mask.test(cat)) {
+        return &x;
+      }
+    }
+  }
+}
+
 size_t AdnlNetworkManagerImpl::add_listening_udp_port(td::uint16 port) {
   auto it = port_2_socket_.find(port);
   if (it != port_2_socket_.end()) {
@@ -106,6 +123,12 @@ void AdnlNetworkManagerImpl::add_proxy_addr(td::IPAddress addr, td::uint16 local
   d.cat_mask = cat_mask;
   proxy_register(d);
   out_desc_[priority].push_back(std::move(d));
+}
+
+void AdnlNetworkManagerImpl::add_hop_addr(td::actor::ActorOwn<AdnlHopClient> hop_client, AdnlCategoryMask cat_mask,
+                                          td::uint32 priority) {
+  auto d = OutDescHop{cat_mask, std::move(hop_client)};
+  out_desc_hop_[priority].push_back(std::move(d));
 }
 
 void AdnlNetworkManagerImpl::receive_udp_message(td::UdpMessage message, size_t idx) {
@@ -229,6 +252,11 @@ void AdnlNetworkManagerImpl::send_udp_packet(AdnlNodeIdShort src_id, AdnlNodeIdS
 
   auto out = choose_out_iface(it->second, priority);
   if (!out) {
+    auto out_hop = choose_out_iface_hop(it->second, priority);
+    if (out_hop != nullptr) {
+      td::actor::send_closure(out_hop->hop_client, &AdnlHopClient::send_packet, src_id, dst_addr, std::move(data));
+      return;
+    }
     VLOG(ADNL_WARNING) << this << ": dropping OUT message [" << src_id << "->" << dst_id << "]: no out rules";
     return;
   }
