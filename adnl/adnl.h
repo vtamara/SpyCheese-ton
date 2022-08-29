@@ -60,6 +60,7 @@ class AdnlSenderInterface : public td::actor::Actor {
 };
 
 class AdnlTunnel : public td::actor::Actor {};
+class AdnlGarlicManager;
 
 class Adnl : public AdnlSenderInterface {
  public:
@@ -116,10 +117,9 @@ class Adnl : public AdnlSenderInterface {
 
   virtual void create_ext_server(std::vector<AdnlNodeIdShort> ids, std::vector<td::uint16> ports,
                                  td::Promise<td::actor::ActorOwn<AdnlExtServer>> promise) = 0;
-  virtual void create_tunnel(AdnlNodeIdShort local_id, std::vector<AdnlNodeIdShort> nodes,
-                             td::Promise<AdnlAddress> promise) = 0;
 
-  virtual void create_tunnel_midpoint_server(AdnlNodeIdShort id) = 0;
+  virtual void create_garlic_manager(AdnlNodeIdShort local_id, td::uint8 cat,
+                                     td::Promise<td::actor::ActorId<AdnlGarlicManager>> promise) = 0;
 
   static td::actor::ActorOwn<Adnl> create(std::string db, td::actor::ActorId<keyring::Keyring> keyring);
 

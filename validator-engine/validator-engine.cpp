@@ -167,10 +167,6 @@ Config::Config(ton::ton_api::engine_validator_config &config) {
       config_add_gc(ton::PublicKeyHash{gc}).ensure();
     }
   }
-
-  for (auto &id : config.adnl_tunnel_servers_) {
-    config_add_adnl_tunnel_server(ton::adnl::AdnlNodeIdShort(id->id_)).ensure();
-  }
 }
 
 ton::tl_object_ptr<ton::ton_api::engine_validator_config> Config::tl() const {
@@ -242,16 +238,10 @@ ton::tl_object_ptr<ton::ton_api::engine_validator_config> Config::tl() const {
   for (auto &id : gc) {
     gc_vec->ids_.push_back(id.tl());
   }
-
-  std::vector<ton::tl_object_ptr<ton::ton_api::adnl_id_short>> tunnel_vec;
-  for (const auto& id : adnl_tunnel_servers) {
-    tunnel_vec.push_back(id.tl());
-  }
-
   return ton::create_tl_object<ton::ton_api::engine_validator_config>(
       out_port, std::move(addrs_vec), std::move(adnl_vec), std::move(dht_vec), std::move(val_vec), full_node.tl(),
       std::move(full_node_slaves_vec), std::move(full_node_masters_vec), std::move(liteserver_vec),
-      std::move(control_vec), std::move(gc_vec), std::move(tunnel_vec));
+      std::move(control_vec), std::move(gc_vec));
 }
 
 td::Result<bool> Config::config_add_network_addr(td::IPAddress in_ip, td::IPAddress out_ip,
@@ -516,10 +506,6 @@ td::Result<bool> Config::config_add_control_process(ton::PublicKeyHash key, td::
 
 td::Result<bool> Config::config_add_gc(ton::PublicKeyHash key) {
   return gc.insert(key).second;
-}
-
-td::Result<bool> Config::config_add_adnl_tunnel_server(ton::adnl::AdnlNodeIdShort id) {
-  return adnl_tunnel_servers.insert(id).second;
 }
 
 void Config::decref(ton::PublicKeyHash key) {
@@ -1679,9 +1665,6 @@ void ValidatorEngine::start_adnl() {
   }
 
   td::actor::send_closure(adnl_, &ton::adnl::Adnl::add_static_nodes_from_config, std::move(adnl_static_nodes_));
-  for (const auto& id : config_.adnl_tunnel_servers) {
-    td::actor::send_closure(adnl_, &ton::adnl::Adnl::create_tunnel_midpoint_server, id);
-  }
   started_adnl();
 }
 

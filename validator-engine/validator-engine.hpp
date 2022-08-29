@@ -87,7 +87,6 @@ struct Config {
   std::map<td::int32, ton::PublicKeyHash> liteservers;
   std::map<td::int32, Control> controls;
   std::set<ton::PublicKeyHash> gc;
-  std::set<ton::adnl::AdnlNodeIdShort> adnl_tunnel_servers;
 
   void decref(ton::PublicKeyHash key);
   void incref(ton::PublicKeyHash key) {
@@ -113,7 +112,6 @@ struct Config {
   td::Result<bool> config_add_control_process(ton::PublicKeyHash key, td::int32 port, ton::PublicKeyHash id,
                                               td::uint32 permissions);
   td::Result<bool> config_add_gc(ton::PublicKeyHash key);
-  td::Result<bool> config_add_adnl_tunnel_server(ton::adnl::AdnlNodeIdShort id);
   td::Result<bool> config_del_network_addr(td::IPAddress addr, std::vector<AdnlCategory> cats,
                                            std::vector<AdnlCategory> prio_cats);
   td::Result<bool> config_del_adnl_addr(ton::PublicKeyHash addr);

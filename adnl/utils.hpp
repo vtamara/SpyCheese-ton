@@ -31,14 +31,46 @@
 #include "common/status.h"
 #include "adnl-node.h"
 #include "adnl-address-list.hpp"
+#include "adnl.h"
 
 namespace ton {
 
 namespace adnl {
 
-inline bool adnl_node_is_older(AdnlNode &a, AdnlNode &b) {
-  return a.addr_list().version() < b.addr_list().version();
-}
+class AdnlSubscribeGuard {
+ public:
+  AdnlSubscribeGuard() = default;
+
+  AdnlSubscribeGuard(td::actor::ActorId<Adnl> adnl, AdnlNodeIdShort id, std::string prefix,
+                     std::unique_ptr<Adnl::Callback> cb)
+      : adnl_(std::move(adnl)), id_(id), prefix_(std::move(prefix)) {
+    td::actor::send_closure(adnl_, &Adnl::subscribe, id_, prefix_, std::move(cb));
+  }
+
+  AdnlSubscribeGuard(AdnlSubscribeGuard&& b) : adnl_(std::move(b.adnl_)), id_(b.id_), prefix_(std::move(b.prefix_)) {
+    b.adnl_ = {};
+  }
+
+  AdnlSubscribeGuard(const AdnlSubscribeGuard&) = delete;
+
+  AdnlSubscribeGuard& operator =(AdnlSubscribeGuard b) {
+    std::swap(adnl_, b.adnl_);
+    std::swap(id_, b.id_);
+    std::swap(prefix_, b.prefix_);
+    return *this;
+  }
+
+  ~AdnlSubscribeGuard() {
+    if (!adnl_.empty()) {
+      td::actor::send_closure(adnl_, &Adnl::unsubscribe, id_, std::move(prefix_));
+    }
+  }
+
+ private:
+  td::actor::ActorId<Adnl> adnl_;
+  AdnlNodeIdShort id_;
+  std::string prefix_;
+};
 
 }  // namespace adnl
 

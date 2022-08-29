@@ -140,17 +140,14 @@ adnl.message.answer query_id:int256 answer:bytes = adnl.Message;
 adnl.message.part hash:int256 total_size:int offset:int data:bytes = adnl.Message;
 
 adnl.tunnel.packetPrefix id:int256 = adnl.tunnel.PacketPrefix;
-adnl.tunnel.queryToPrev addr:int256 data:bytes = adnl.tunnel.QueryToPrev;
-adnl.tunnel.queryToPrevNone = adnl.tunnel.QueryToPrev;
 
-adnl.hop.forwardToUdp flags:# ipv4:flags.0?int ipv6:flags.1?int128 port:int data:bytes = adnl.hop.Message;
-adnl.hop.forwardToHop dst:int256 encrypted_data:bytes = adnl.hop.Message;
-adnl.hop.encryptedMessage data:bytes = adnl.hop.Message;
+adnl.garlic.forwardToUdp flags:# ipv4:flags.0?int ipv6:flags.1?int128 port:int data:bytes = adnl.garlic.Message;
+adnl.garlic.forwardToNext dst:int256 encrypted_data:bytes = adnl.garlic.Message;
+adnl.garlic.createTunnelMidpoint encrypt_via:PublicKey proxy_to:int256 message_prefix:int256 = adnl.garlic.Message;
+adnl.garlic.multipleMessages messages:(vector adnl.garlic.Message) = adnl.garlic.Message;
+adnl.garlic.encryptedMessage data:bytes = adnl.garlic.Message;
 
 ---functions---
-
-adnl.tunnel.createMidpoint encrypt_via:PublicKey proxy_to:int256 message_prefix:int256 query_to_prev:adnl.tunnel.QueryToPrev = tonNode.Success;
-adnl.tunnel.encryptedQuery data:bytes = tonNode.Success;
 
 ---types---
 
@@ -597,8 +594,7 @@ engine.validator.config out_port:int addrs:(vector engine.Addr) adnl:(vector eng
         validators:(vector engine.validator) fullnode:int256 fullnodeslaves:(vector engine.validator.fullNodeSlave)
         fullnodemasters:(vector engine.validator.fullNodeMaster)
         liteservers:(vector engine.liteServer) control:(vector engine.controlInterface)
-        gc:engine.gc
-        adnl_tunnel_servers:(vector adnl.id.Short) = engine.validator.Config;
+        gc:engine.gc = engine.validator.Config;
 
 ---functions---
 ---types---

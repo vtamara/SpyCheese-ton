@@ -17,17 +17,19 @@
 #pragma once
 
 #include "adnl.h"
+#include "adnl-tunnel.h"
 #include "adnl-peer-table.h"
 #include "keys/encryptor.h"
+#include "utils.hpp"
 
 namespace ton {
 
 namespace adnl {
 
-class AdnlHopServer : public td::actor::Actor {
+class AdnlGarlicServer : public td::actor::Actor {
  public:
-  explicit AdnlHopServer(AdnlNodeIdShort local_id, td::actor::ActorId<keyring::Keyring> keyring,
-                         td::actor::ActorId<Adnl> adnl, td::actor::ActorId<AdnlNetworkManager> network_manager)
+  explicit AdnlGarlicServer(AdnlNodeIdShort local_id, td::actor::ActorId<keyring::Keyring> keyring,
+                            td::actor::ActorId<Adnl> adnl, td::actor::ActorId<AdnlNetworkManager> network_manager)
       : local_id_(local_id)
       , keyring_(std::move(keyring))
       , adnl_(std::move(adnl))
@@ -43,31 +45,19 @@ class AdnlHopServer : public td::actor::Actor {
   td::actor::ActorId<Adnl> adnl_;
   td::actor::ActorId<AdnlNetworkManager> network_manager_;
 
+  struct TunnelMidpoint {
+    td::actor::ActorOwn<AdnlInboundTunnelMidpoint> actor;
+    AdnlSubscribeGuard guard;
+  };
+  std::map<td::Bits256, TunnelMidpoint> tunnels_;
+
   void receive_message(AdnlNodeIdShort src, td::BufferSlice data);
-  void process_message(AdnlNodeIdShort src, ton_api::adnl_hop_encryptedMessage& obj);
-  void process_message(AdnlNodeIdShort src, ton_api::adnl_hop_forwardToUdp& obj);
-  void process_message(AdnlNodeIdShort src, ton_api::adnl_hop_forwardToHop& obj);
-};
-
-class AdnlHopClient : public td::actor::Actor {
- public:
-  AdnlHopClient(AdnlNodeIdShort local_id, std::vector<AdnlNodeIdFull> hops, td::actor::ActorId<Adnl> adnl)
-      : local_id_(local_id), adnl_(std::move(adnl)) {
-    for (const AdnlNodeIdFull& id : hops) {
-      hops_.push_back(id.compute_short_id());
-      auto E = id.pubkey().create_encryptor();
-      E.ensure();
-      encryptors_.push_back(E.move_as_ok());
-    }
-  }
-
-  void send_packet(AdnlNodeIdShort src, td::IPAddress dst_ip, td::BufferSlice data);
-
- private:
-  AdnlNodeIdShort local_id_;
-  std::vector<AdnlNodeIdShort> hops_;
-  std::vector<std::unique_ptr<Encryptor>> encryptors_;
-  td::actor::ActorId<Adnl> adnl_;
+  void process_message(AdnlNodeIdShort src, tl_object_ptr<ton_api::adnl_garlic_Message> obj);
+  void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_encryptedMessage& obj);
+  void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_multipleMessages& obj);
+  void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_forwardToUdp& obj);
+  void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_forwardToNext& obj);
+  void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_createTunnelMidpoint& obj);
 };
 
 }  // namespace adnl

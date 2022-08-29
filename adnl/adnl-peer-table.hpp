@@ -31,7 +31,6 @@
 #include "adnl-static-nodes.h"
 #include "adnl-ext-server.h"
 #include "adnl-address-list.h"
-#include "adnl-tunnel-server.hpp"
 
 namespace ton {
 
@@ -101,12 +100,9 @@ class AdnlPeerTableImpl : public AdnlPeerTable {
   void create_ext_server(std::vector<AdnlNodeIdShort> ids, std::vector<td::uint16> ports,
                          td::Promise<td::actor::ActorOwn<AdnlExtServer>> promise) override;
 
-  void create_tunnel(AdnlNodeIdShort local_id, std::vector<AdnlNodeIdShort> nodes,
-                     td::Promise<AdnlAddress> promise) override;
-  void create_tunnel_cont(AdnlNodeIdShort local_id, AdnlNodeIdShort entry, std::vector<PublicKey> pubkeys,
-                          td::Promise<AdnlAddress> promise);
+  void create_garlic_manager(AdnlNodeIdShort local_id, td::uint8 cat,
+                             td::Promise<td::actor::ActorId<AdnlGarlicManager>> promise) override;
 
-  void create_tunnel_midpoint_server(AdnlNodeIdShort id) override;
   void get_conn_ip_str(AdnlNodeIdShort l_id, AdnlNodeIdShort p_id, td::Promise<td::string> promise) override;
 
   struct PrintId {};
@@ -139,8 +135,6 @@ class AdnlPeerTableImpl : public AdnlPeerTable {
   AdnlNodeIdShort proxy_addr_;
   //std::map<td::uint64, td::actor::ActorId<AdnlQuery>> out_queries_;
   //td::uint64 last_query_id_ = 1;
-
-  std::map<AdnlNodeIdShort, td::actor::ActorOwn<AdnlTunnelServer>> tunnel_servers_;
 };
 
 inline td::StringBuilder &operator<<(td::StringBuilder &sb, const AdnlPeerTableImpl::PrintId &id) {

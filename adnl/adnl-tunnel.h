@@ -54,7 +54,7 @@ class AdnlInboundTunnelEndpoint : public AdnlInboundTunnelPoint {
 class AdnlInboundTunnelMidpoint : public AdnlInboundTunnelPoint {
  public:
   AdnlInboundTunnelMidpoint(ton::PublicKey encrypt_via, AdnlNodeIdShort proxy_to, AdnlNodeIdShort proxy_as,
-                            td::actor::ActorId<keyring::Keyring> keyring, td::actor::ActorId<AdnlPeerTable> adnl)
+                            td::actor::ActorId<keyring::Keyring> keyring, td::actor::ActorId<Adnl> adnl)
       : encrypt_via_(std::move(encrypt_via)), proxy_to_(proxy_to), proxy_as_(proxy_as), keyring_(keyring), adnl_(adnl) {
   }
   void start_up() override;
@@ -67,17 +67,7 @@ class AdnlInboundTunnelMidpoint : public AdnlInboundTunnelPoint {
   AdnlNodeIdShort proxy_to_;
   AdnlNodeIdShort proxy_as_;
   td::actor::ActorId<keyring::Keyring> keyring_;
-  td::actor::ActorId<AdnlPeerTable> adnl_;
-};
-
-class AdnlProxyNode : public td::actor::Actor {
- public:
-  void receive_message(AdnlNodeIdShort src, AdnlNodeIdShort dst, td::BufferSlice data);
-  void receive_query(AdnlNodeIdShort src, AdnlNodeIdShort dst, td::BufferSlice data,
-                     td::Promise<td::BufferSlice> promise);
-
- private:
-  std::map<PublicKeyHash, td::actor::ActorOwn<AdnlInboundTunnelMidpoint>> mid_;
+  td::actor::ActorId<Adnl> adnl_;
 };
 
 }  // namespace adnl

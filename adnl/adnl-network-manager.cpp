@@ -48,10 +48,11 @@ AdnlNetworkManagerImpl::OutDesc *AdnlNetworkManagerImpl::choose_out_iface(td::ui
   }
 }
 
-AdnlNetworkManagerImpl::OutDescHop *AdnlNetworkManagerImpl::choose_out_iface_hop(td::uint8 cat, td::uint32 priority) {
-  auto it = out_desc_hop_.upper_bound(priority);
+AdnlNetworkManagerImpl::OutDescGarlic *AdnlNetworkManagerImpl::choose_out_iface_garlic(td::uint8 cat,
+                                                                                       td::uint32 priority) {
+  auto it = out_desc_garlic_.upper_bound(priority);
   while (true) {
-    if (it == out_desc_hop_.begin()) {
+    if (it == out_desc_garlic_.begin()) {
       return nullptr;
     }
     it--;
@@ -125,10 +126,10 @@ void AdnlNetworkManagerImpl::add_proxy_addr(td::IPAddress addr, td::uint16 local
   out_desc_[priority].push_back(std::move(d));
 }
 
-void AdnlNetworkManagerImpl::add_hop_addr(td::actor::ActorOwn<AdnlHopClient> hop_client, AdnlCategoryMask cat_mask,
-                                          td::uint32 priority) {
-  auto d = OutDescHop{cat_mask, std::move(hop_client)};
-  out_desc_hop_[priority].push_back(std::move(d));
+void AdnlNetworkManagerImpl::add_garlic_addr(td::actor::ActorOwn<AdnlGarlicManager> garlic_manager,
+                                             AdnlCategoryMask cat_mask, td::uint32 priority) {
+  auto d = OutDescGarlic{cat_mask, std::move(garlic_manager)};
+  out_desc_garlic_[priority].push_back(std::move(d));
 }
 
 void AdnlNetworkManagerImpl::receive_udp_message(td::UdpMessage message, size_t idx) {
@@ -252,9 +253,10 @@ void AdnlNetworkManagerImpl::send_udp_packet(AdnlNodeIdShort src_id, AdnlNodeIdS
 
   auto out = choose_out_iface(it->second, priority);
   if (!out) {
-    auto out_hop = choose_out_iface_hop(it->second, priority);
-    if (out_hop != nullptr) {
-      td::actor::send_closure(out_hop->hop_client, &AdnlHopClient::send_packet, src_id, dst_addr, std::move(data));
+    auto out_garlic = choose_out_iface_garlic(it->second, priority);
+    if (out_garlic != nullptr) {
+      td::actor::send_closure(out_garlic->garlic_manager, &AdnlGarlicManager::send_packet, src_id, dst_addr,
+                              std::move(data));
       return;
     }
     VLOG(ADNL_WARNING) << this << ": dropping OUT message [" << src_id << "->" << dst_id << "]: no out rules";

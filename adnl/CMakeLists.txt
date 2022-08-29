@@ -31,8 +31,7 @@ set(ADNL_HEADERS
   adnl-proxy-types.hpp
   adnl.h
   utils.hpp
-  adnl-tunnel-server.hpp
-  adnl-hop.hpp
+  adnl-garlic-server.hpp
   adnl-tunnel.h
 )
 set(ADNL_SOURCE
@@ -54,9 +53,9 @@ set(ADNL_SOURCE
   adnl-static-nodes.cpp
   adnl-proxy-types.cpp
   utils.cpp
-  adnl-tunnel-server.cpp
-  adnl-hop.cpp
+  adnl-garlic-server.cpp
   adnl-tunnel.cpp
+  adnl-garlic-manager.cpp
   ${ADNL_HEADERS})
 
 set(ADNL_TEST_SOURCE
