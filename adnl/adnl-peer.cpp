@@ -26,6 +26,7 @@
 #include "td/utils/base64.h"
 #include "td/utils/Random.h"
 #include "auto/tl/ton_api.h"
+#include "common/delay.h"
 
 namespace ton {
 
@@ -75,16 +76,18 @@ void AdnlPeerPairImpl::alarm() {
   alarm_timestamp().relax(retry_send_at_);
 }
 
-void AdnlPeerPairImpl::discover() {
-  CHECK(!dht_query_active_);
+void AdnlPeerPairImpl::discover(int max_retries) {
+  if (dht_query_active_) {
+    return;
+  }
   CHECK(!dht_node_.empty());
   dht_query_active_ = true;
 
-  auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), id = print_id(),
-                                       peer_id = peer_id_short_](td::Result<dht::DhtValue> kv) {
+  auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), id = print_id(), peer_id = peer_id_short_,
+                                       max_retries](td::Result<dht::DhtValue> kv) {
     if (kv.is_error()) {
       td::actor::send_closure(SelfId, &AdnlPeerPairImpl::got_data_from_dht,
-                              kv.move_as_error_prefix("failed to get from dht: "));
+                              kv.move_as_error_prefix("failed to get from dht: "), max_retries);
       return;
     }
     auto k = kv.move_as_ok();
@@ -94,18 +97,19 @@ void AdnlPeerPairImpl::discover() {
     auto addr_list = fetch_tl_object<ton_api::adnl_addressList>(k.value().clone(), true);
     if (addr_list.is_error()) {
       td::actor::send_closure(SelfId, &AdnlPeerPairImpl::got_data_from_dht,
-                              addr_list.move_as_error_prefix("bad dht value: "));
+                              addr_list.move_as_error_prefix("bad dht value: "), max_retries);
       return;
     }
 
     auto F = AdnlAddressList::create(addr_list.move_as_ok());
     if (F.is_error()) {
-      td::actor::send_closure(SelfId, &AdnlPeerPairImpl::got_data_from_dht, F.move_as_error_prefix("bad dht value: "));
+      td::actor::send_closure(SelfId, &AdnlPeerPairImpl::got_data_from_dht, F.move_as_error_prefix("bad dht value: "),
+                              max_retries);
       return;
     }
 
     AdnlNode node{pub, F.move_as_ok()};
-    td::actor::send_closure(SelfId, &AdnlPeerPairImpl::got_data_from_dht, std::move(node));
+    td::actor::send_closure(SelfId, &AdnlPeerPairImpl::got_data_from_dht, std::move(node), max_retries);
   });
 
   td::actor::send_closure(dht_node_, &dht::Dht::get_value, dht::DhtKey{peer_id_short_.pubkey_hash(), "address", 0},
@@ -919,12 +923,18 @@ void AdnlPeerPairImpl::got_data_from_static_nodes(td::Result<AdnlNode> R) {
   update_addr_list(value.addr_list());
 }
 
-void AdnlPeerPairImpl::got_data_from_dht(td::Result<AdnlNode> R) {
+void AdnlPeerPairImpl::got_data_from_dht(td::Result<AdnlNode> R, int max_retries) {
   CHECK(dht_query_active_);
   dht_query_active_ = false;
   next_dht_query_at_ = td::Timestamp::in(td::Random::fast(60.0, 120.0));
   if (R.is_error()) {
     VLOG(ADNL_INFO) << this << ": dht query failed: " << R.move_as_error();
+    if (addr_list_.empty() && max_retries > 0) {
+      next_dht_query_at_ = td::Timestamp::never();
+      delay_action([SelfId = actor_id(this), max_retries]() {
+        td::actor::send_closure(SelfId, &AdnlPeerPairImpl::discover, max_retries - 1);
+      }, td::Timestamp::in(0.5));
+    }
     return;
   }
   auto value = R.move_as_ok();

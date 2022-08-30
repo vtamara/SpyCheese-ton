@@ -64,7 +64,7 @@ class AdnlPeerPairImpl : public AdnlPeerPair {
   void start_up() override;
   void alarm() override;
 
-  void discover();
+  void discover(int max_retries = 3);
 
   void receive_packet_from_channel(AdnlChannelIdShort id, AdnlPacket packet) override;
   void receive_packet_checked(AdnlPacket packet) override;
@@ -92,7 +92,7 @@ class AdnlPeerPairImpl : public AdnlPeerPair {
 
   void got_data_from_db(td::Result<AdnlDbItem> R);
   void got_data_from_static_nodes(td::Result<AdnlNode> R);
-  void got_data_from_dht(td::Result<AdnlNode> R);
+  void got_data_from_dht(td::Result<AdnlNode> R, int max_retries);
 
   //void conn_ready(AdnlConnectionIdShort id, td::Result<td::actor::ActorOwn<AdnlNetworkConnection>> R);
 
