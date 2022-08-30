@@ -172,6 +172,17 @@ class Overlays : public td::actor::Actor {
     }
     virtual ~Callback() = default;
   };
+  class EmptyCallback : public Callback {
+   public:
+    void receive_message(adnl::AdnlNodeIdShort src, OverlayIdShort overlay_id, td::BufferSlice data) override {
+    }
+    void receive_query(adnl::AdnlNodeIdShort src, OverlayIdShort overlay_id, td::BufferSlice data,
+                       td::Promise<td::BufferSlice> promise) override {
+      promise.set_error(td::Status::Error("no callback"));
+    }
+    void receive_broadcast(PublicKeyHash src, OverlayIdShort overlay_id, td::BufferSlice data) override {
+    }
+  };
 
   static constexpr td::uint32 max_simple_broadcast_size() {
     return 768;
@@ -194,6 +205,9 @@ class Overlays : public td::actor::Actor {
 
   virtual void create_public_overlay(adnl::AdnlNodeIdShort local_id, OverlayIdFull overlay_id,
                                      std::unique_ptr<Callback> callback, OverlayPrivacyRules rules, td::string scope) = 0;
+  virtual void create_public_overlay_external(adnl::AdnlNodeIdShort local_id, OverlayIdFull overlay_id,
+                                              std::unique_ptr<Callback> callback, OverlayPrivacyRules rules,
+                                              td::string scope) = 0;
   virtual void create_private_overlay(adnl::AdnlNodeIdShort local_id, OverlayIdFull overlay_id,
                                       std::vector<adnl::AdnlNodeIdShort> nodes, std::unique_ptr<Callback> callback,
                                       OverlayPrivacyRules rules) = 0;

@@ -37,10 +37,10 @@ td::actor::ActorOwn<Overlay> Overlay::create(td::actor::ActorId<keyring::Keyring
                                              td::actor::ActorId<OverlayManager> manager,
                                              td::actor::ActorId<dht::Dht> dht_node, adnl::AdnlNodeIdShort local_id,
                                              OverlayIdFull overlay_id, std::unique_ptr<Overlays::Callback> callback,
-                                             OverlayPrivacyRules rules, td::string scope) {
+                                             OverlayPrivacyRules rules, td::string scope, bool is_external) {
   auto R = td::actor::create_actor<OverlayImpl>("overlay", keyring, adnl, manager, dht_node, local_id,
                                                 std::move(overlay_id), true, std::vector<adnl::AdnlNodeIdShort>(),
-                                                std::move(callback), std::move(rules), scope);
+                                                std::move(callback), std::move(rules), scope, is_external);
   return td::actor::ActorOwn<Overlay>(std::move(R));
 }
 
@@ -60,7 +60,7 @@ OverlayImpl::OverlayImpl(td::actor::ActorId<keyring::Keyring> keyring, td::actor
                          td::actor::ActorId<OverlayManager> manager, td::actor::ActorId<dht::Dht> dht_node,
                          adnl::AdnlNodeIdShort local_id, OverlayIdFull overlay_id, bool pub,
                          std::vector<adnl::AdnlNodeIdShort> nodes, std::unique_ptr<Overlays::Callback> callback,
-                         OverlayPrivacyRules rules, td::string scope)
+                         OverlayPrivacyRules rules, td::string scope, bool is_external)
     : keyring_(keyring)
     , adnl_(adnl)
     , manager_(manager)
@@ -70,10 +70,16 @@ OverlayImpl::OverlayImpl(td::actor::ActorId<keyring::Keyring> keyring, td::actor
     , callback_(std::move(callback))
     , public_(pub)
     , rules_(std::move(rules))
-    , scope_(scope) {
+    , scope_(scope)
+    , is_external_(is_external) {
   overlay_id_ = id_full_.compute_short_id();
 
-  VLOG(OVERLAY_INFO) << this << ": creating " << (public_ ? "public" : "private");
+  if (is_external_) {
+    CHECK(public_);
+    VLOG(OVERLAY_INFO) << this << ": creating public external";
+  } else {
+    VLOG(OVERLAY_INFO) << this << ": creating " << (public_ ? "public" : "private");
+  }
 
   for (auto &node : nodes) {
     CHECK(!public_);
@@ -137,6 +143,11 @@ void OverlayImpl::process_query(adnl::AdnlNodeIdShort src, ton_api::overlay_getB
 */
 
 void OverlayImpl::receive_query(adnl::AdnlNodeIdShort src, td::BufferSlice data, td::Promise<td::BufferSlice> promise) {
+  if (is_external_) {
+    LOG(OVERLAY_WARNING) << "dropping query in external overlay " << overlay_id_;
+    promise.set_error(td::Status::Error("overlay is external"));
+    return;
+  }
   if (!public_) {
     auto P = peers_.get(src);
     if (P == nullptr) {
@@ -222,6 +233,10 @@ void OverlayImpl::receive_message(adnl::AdnlNodeIdShort src, td::BufferSlice dat
       VLOG(OVERLAY_WARNING) << this << ": received query in private overlay from unknown source " << src;
       return;
     }
+  }
+  if (is_external_) {
+    LOG(OVERLAY_WARNING) << "dropping message in external overlay " << overlay_id_;
+    return;
   }
   auto X = fetch_tl_object<ton_api::overlay_Broadcast>(data.clone(), true);
   if (X.is_error()) {
@@ -322,6 +337,10 @@ void OverlayImpl::receive_dht_nodes(td::Result<dht::DhtValue> res, bool dummy) {
     }
   } else {
     VLOG(OVERLAY_NOTICE) << this << ": can not get value from DHT: " << res.move_as_error();
+  }
+
+  if (is_external_) {
+    return;
   }
 
   VLOG(OVERLAY_INFO) << this << ": adding self node to DHT overlay's nodes";
@@ -497,6 +516,9 @@ void OverlayImpl::send_new_fec_broadcast_part(PublicKeyHash local_id, Overlay::B
 }
 
 void OverlayImpl::deliver_broadcast(PublicKeyHash source, td::BufferSlice data) {
+  if (is_external_) {
+    return;
+  }
   callback_->receive_broadcast(source, overlay_id_, std::move(data));
 }
 
@@ -569,6 +591,10 @@ void OverlayImpl::set_privacy_rules(OverlayPrivacyRules rules) {
 }
 
 void OverlayImpl::check_broadcast(PublicKeyHash src, td::BufferSlice data, td::Promise<td::Unit> promise) {
+  if (is_external_) {
+    promise.set_result(td::Unit());
+    return;
+  }
   callback_->check_broadcast(src, overlay_id_, std::move(data), std::move(promise));
 }
 
