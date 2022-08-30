@@ -29,8 +29,6 @@
 
 #include "adnl-query.h"
 #include "adnl-ext-client.h"
-#include "adnl-tunnel.h"
-#include "adnl-garlic-manager.hpp"
 
 namespace ton {
 
@@ -392,16 +390,6 @@ void AdnlPeerTableImpl::decrypt_message(AdnlNodeIdShort dst, td::BufferSlice dat
 void AdnlPeerTableImpl::create_ext_server(std::vector<AdnlNodeIdShort> ids, std::vector<td::uint16> ports,
                                           td::Promise<td::actor::ActorOwn<AdnlExtServer>> promise) {
   promise.set_value(AdnlExtServerCreator::create(actor_id(this), std::move(ids), std::move(ports)));
-}
-
-void AdnlPeerTableImpl::create_garlic_manager(AdnlNodeIdShort local_id, td::uint8 cat,
-                                              td::Promise<td::actor::ActorId<AdnlGarlicManager>> promise) {
-  auto actor = td::actor::create_actor<AdnlGarlicManager>("adnlgarlicmanager", local_id, cat, actor_id(this), keyring_, nullptr);
-  auto id = actor.get();
-  AdnlCategoryMask cat_mask;
-  cat_mask.set(cat);
-  td::actor::send_closure(network_manager_, &AdnlNetworkManager::add_garlic_addr, std::move(actor), cat_mask, 0);
-  promise.set_result(id);
 }
 
 void AdnlPeerTableImpl::get_conn_ip_str(AdnlNodeIdShort l_id, AdnlNodeIdShort p_id, td::Promise<td::string> promise) {

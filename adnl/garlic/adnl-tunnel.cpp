@@ -17,7 +17,7 @@
     Copyright 2017-2020 Telegram Systems LLP
 */
 #include "adnl-tunnel.h"
-#include "adnl-peer-table.h"
+#include "adnl/adnl-peer-table.h"
 
 namespace ton {
 
@@ -56,7 +56,7 @@ void AdnlInboundTunnelEndpoint::decrypted_packet(AdnlNodeIdShort src, td::IPAddr
   if (idx == decrypt_via_.size() - 1) {
     AdnlCategoryMask cat_mask;
     cat_mask.set();
-    td::actor::send_closure(adnl_, &AdnlPeerTable::receive_packet, src_addr, cat_mask, std::move(data));
+    td::actor::send_closure(adnl_, &Adnl::receive_packet, src_addr, cat_mask, std::move(data));
     return;
   }
   auto F = fetch_tl_object<ton_api::adnl_tunnel_packetContents>(data, true);

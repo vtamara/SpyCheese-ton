@@ -18,8 +18,7 @@
 */
 #pragma once
 
-#include "adnl.h"
-#include "adnl-peer-table.h"
+#include "adnl/adnl.h"
 #include "keys/encryptor.h"
 
 #include <map>
@@ -28,7 +27,7 @@ namespace ton {
 
 namespace adnl {
 
-class AdnlInboundTunnelPoint : public AdnlTunnel {
+class AdnlInboundTunnelPoint : public td::actor::Actor {
  public:
   virtual ~AdnlInboundTunnelPoint() = default;
   virtual void receive_packet(AdnlNodeIdShort src, td::IPAddress src_addr, td::BufferSlice datagram) = 0;
@@ -44,7 +43,7 @@ class AdnlInboundTunnelEndpoint : public AdnlInboundTunnelPoint {
 
   AdnlInboundTunnelEndpoint(std::vector<PublicKeyHash> decrypt_via, AdnlCategoryMask cat_mask,
                             std::unique_ptr<Callback> callback, td::actor::ActorId<keyring::Keyring> keyring,
-                            td::actor::ActorId<AdnlPeerTable> adnl)
+                            td::actor::ActorId<Adnl> adnl)
       : decrypt_via_(std::move(decrypt_via))
       , cat_mask_(cat_mask)
       , callback_(std::move(callback))
@@ -61,7 +60,7 @@ class AdnlInboundTunnelEndpoint : public AdnlInboundTunnelPoint {
   AdnlCategoryMask cat_mask_;
   std::unique_ptr<Callback> callback_;
   td::actor::ActorId<keyring::Keyring> keyring_;
-  td::actor::ActorId<AdnlPeerTable> adnl_;
+  td::actor::ActorId<Adnl> adnl_;
 };
 
 class AdnlInboundTunnelMidpoint : public AdnlInboundTunnelPoint {

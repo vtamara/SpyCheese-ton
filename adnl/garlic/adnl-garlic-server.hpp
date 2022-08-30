@@ -16,11 +16,11 @@
 */
 #pragma once
 
-#include "adnl.h"
+#include "adnl/adnl.h"
 #include "adnl-tunnel.h"
-#include "adnl-peer-table.h"
+#include "adnl/adnl-peer-table.h"
 #include "keys/encryptor.h"
-#include "utils.hpp"
+#include "adnl/utils.hpp"
 
 namespace ton {
 

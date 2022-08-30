@@ -55,7 +55,6 @@ class AdnlNetworkConnection : public td::actor::Actor {
   virtual ~AdnlNetworkConnection() = default;
 };
 
-class AdnlGarlicManager;
 
 class AdnlNetworkManager : public td::actor::Actor {
  public:
@@ -66,6 +65,11 @@ class AdnlNetworkManager : public td::actor::Actor {
     //virtual void receive_packet(td::IPAddress addr, ConnHandle conn_handle, td::BufferSlice data) = 0;
     virtual void receive_packet(td::IPAddress addr, AdnlCategoryMask cat_mask, td::BufferSlice data) = 0;
   };
+  class CustomSender : public td::actor::Actor {
+   public:
+    virtual ~CustomSender() = default;
+    virtual void send_packet(AdnlNodeIdShort src, td::IPAddress dst_ip, td::BufferSlice data) = 0;
+  };
   static td::actor::ActorOwn<AdnlNetworkManager> create(td::uint16 out_port);
 
   virtual ~AdnlNetworkManager() = default;
@@ -75,8 +79,8 @@ class AdnlNetworkManager : public td::actor::Actor {
   virtual void add_self_addr(td::IPAddress addr, AdnlCategoryMask cat_mask, td::uint32 priority) = 0;
   virtual void add_proxy_addr(td::IPAddress addr, td::uint16 local_port, std::shared_ptr<AdnlProxy> proxy,
                               AdnlCategoryMask cat_mask, td::uint32 priority) = 0;
-  virtual void add_garlic_addr(td::actor::ActorOwn<AdnlGarlicManager> garlic_manager, AdnlCategoryMask cat_mask,
-                               td::uint32 priority) = 0;
+  virtual void add_custom_sender_addr(td::actor::ActorOwn<CustomSender> sender, AdnlCategoryMask cat_mask,
+                                      td::uint32 priority) = 0;
   virtual void send_udp_packet(AdnlNodeIdShort src_id, AdnlNodeIdShort dst_id, td::IPAddress dst_addr,
                                td::uint32 priority, td::BufferSlice data) = 0;
   //virtual void send_tcp_packet(AdnlNodeIdShort src_id, AdnlNodeIdShort dst_id, td::IPAddress dst_addr,

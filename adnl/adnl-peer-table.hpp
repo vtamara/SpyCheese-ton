@@ -101,9 +101,6 @@ class AdnlPeerTableImpl : public AdnlPeerTable {
   void create_ext_server(std::vector<AdnlNodeIdShort> ids, std::vector<td::uint16> ports,
                          td::Promise<td::actor::ActorOwn<AdnlExtServer>> promise) override;
 
-  void create_garlic_manager(AdnlNodeIdShort local_id, td::uint8 cat,
-                             td::Promise<td::actor::ActorId<AdnlGarlicManager>> promise) override;
-
   void get_conn_ip_str(AdnlNodeIdShort l_id, AdnlNodeIdShort p_id, td::Promise<td::string> promise) override;
 
   struct PrintId {};

@@ -16,7 +16,7 @@
 */
 #include "adnl-garlic-manager.hpp"
 #include "td/utils/Random.h"
-#include "adnl-address-list.hpp"
+#include "adnl/adnl-address-list.hpp"
 #include "td/utils/overloaded.h"
 #include "auto/tl/ton_api.hpp"
 
@@ -25,7 +25,7 @@ namespace ton {
 namespace adnl {
 
 AdnlGarlicManager::AdnlGarlicManager(AdnlNodeIdShort local_id, td::uint8 adnl_cat,
-                                     td::actor::ActorId<AdnlPeerTable> adnl,
+                                     td::actor::ActorId<Adnl> adnl,
                                      td::actor::ActorId<keyring::Keyring> keyring,
                                      std::shared_ptr<dht::DhtGlobalConfig> dht_config)
     : local_id_(local_id)

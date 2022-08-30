@@ -16,24 +16,24 @@
 */
 #pragma once
 
-#include "adnl.h"
+#include "adnl/adnl.h"
 #include "adnl-tunnel.h"
-#include "adnl-peer-table.h"
+#include "adnl/adnl.h"
 #include "keys/encryptor.h"
-#include "utils.hpp"
+#include "adnl/utils.hpp"
 #include "dht/dht.h"
 
 namespace ton {
 
 namespace adnl {
 
-class AdnlGarlicManager : public td::actor::Actor {
+class AdnlGarlicManager : public AdnlNetworkManager::CustomSender {
  public:
-  AdnlGarlicManager(AdnlNodeIdShort local_id, td::uint8 adnl_cat, td::actor::ActorId<AdnlPeerTable> adnl,
+  AdnlGarlicManager(AdnlNodeIdShort local_id, td::uint8 adnl_cat, td::actor::ActorId<Adnl> adnl,
                     td::actor::ActorId<keyring::Keyring> keyring, std::shared_ptr<dht::DhtGlobalConfig> dht_config);
 
   void start_up() override;
-  void send_packet(AdnlNodeIdShort src, td::IPAddress dst_ip, td::BufferSlice data);
+  void send_packet(AdnlNodeIdShort src, td::IPAddress dst_ip, td::BufferSlice data) override;
   void add_server(AdnlNodeIdFull server);
   void init_connection(size_t chain_length, td::Promise<td::Unit> promise);
 
@@ -44,7 +44,7 @@ class AdnlGarlicManager : public td::actor::Actor {
  private:
   AdnlNodeIdShort local_id_;
   td::uint8 adnl_cat_;
-  td::actor::ActorId<AdnlPeerTable> adnl_;
+  td::actor::ActorId<Adnl> adnl_;
   td::actor::ActorId<keyring::Keyring> keyring_;
   std::shared_ptr<dht::DhtGlobalConfig> dht_config_;
 

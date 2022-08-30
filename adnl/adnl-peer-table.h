@@ -89,7 +89,6 @@ class AdnlPeerTable : public Adnl {
 
   virtual void answer_query(AdnlNodeIdShort src, AdnlNodeIdShort dst, AdnlQueryId query_id, td::BufferSlice data) = 0;
 
-  virtual void receive_packet(td::IPAddress addr, AdnlCategoryMask cat_mask, td::BufferSlice data) = 0;
   virtual void receive_decrypted_packet(AdnlNodeIdShort dst, AdnlPacket packet) = 0;
   virtual void send_message_in(AdnlNodeIdShort src, AdnlNodeIdShort dst, AdnlMessage message, td::uint32 flags) = 0;
 

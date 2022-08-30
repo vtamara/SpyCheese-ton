@@ -64,9 +64,6 @@ class AdnlSenderInterface : public td::actor::Actor {
   virtual void get_conn_ip_str(AdnlNodeIdShort l_id, AdnlNodeIdShort p_id, td::Promise<td::string> promise) = 0;
 };
 
-class AdnlTunnel : public td::actor::Actor {};
-class AdnlGarlicManager;
-
 class Adnl : public AdnlSenderInterface {
  public:
   class Callback {
@@ -124,8 +121,7 @@ class Adnl : public AdnlSenderInterface {
   virtual void create_ext_server(std::vector<AdnlNodeIdShort> ids, std::vector<td::uint16> ports,
                                  td::Promise<td::actor::ActorOwn<AdnlExtServer>> promise) = 0;
 
-  virtual void create_garlic_manager(AdnlNodeIdShort local_id, td::uint8 cat,
-                                     td::Promise<td::actor::ActorId<AdnlGarlicManager>> promise) = 0;
+  virtual void receive_packet(td::IPAddress addr, AdnlCategoryMask cat_mask, td::BufferSlice data) = 0;
 
   static td::actor::ActorOwn<Adnl> create(std::string db, td::actor::ActorId<keyring::Keyring> keyring);
 

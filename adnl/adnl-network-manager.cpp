@@ -48,11 +48,11 @@ AdnlNetworkManagerImpl::OutDesc *AdnlNetworkManagerImpl::choose_out_iface(td::ui
   }
 }
 
-AdnlNetworkManagerImpl::OutDescGarlic *AdnlNetworkManagerImpl::choose_out_iface_garlic(td::uint8 cat,
+AdnlNetworkManagerImpl::OutDescCustom *AdnlNetworkManagerImpl::choose_out_iface_custom(td::uint8 cat,
                                                                                        td::uint32 priority) {
-  auto it = out_desc_garlic_.upper_bound(priority);
+  auto it = out_desc_custom_.upper_bound(priority);
   while (true) {
-    if (it == out_desc_garlic_.begin()) {
+    if (it == out_desc_custom_.begin()) {
       return nullptr;
     }
     it--;
@@ -126,10 +126,10 @@ void AdnlNetworkManagerImpl::add_proxy_addr(td::IPAddress addr, td::uint16 local
   out_desc_[priority].push_back(std::move(d));
 }
 
-void AdnlNetworkManagerImpl::add_garlic_addr(td::actor::ActorOwn<AdnlGarlicManager> garlic_manager,
-                                             AdnlCategoryMask cat_mask, td::uint32 priority) {
-  auto d = OutDescGarlic{cat_mask, std::move(garlic_manager)};
-  out_desc_garlic_[priority].push_back(std::move(d));
+void AdnlNetworkManagerImpl::add_custom_sender_addr(td::actor::ActorOwn<CustomSender> sender,
+                                                    AdnlCategoryMask cat_mask, td::uint32 priority) {
+  auto d = OutDescCustom{cat_mask, std::move(sender)};
+  out_desc_custom_[priority].push_back(std::move(d));
 }
 
 void AdnlNetworkManagerImpl::receive_udp_message(td::UdpMessage message, size_t idx) {
@@ -253,10 +253,9 @@ void AdnlNetworkManagerImpl::send_udp_packet(AdnlNodeIdShort src_id, AdnlNodeIdS
 
   auto out = choose_out_iface(it->second, priority);
   if (!out) {
-    auto out_garlic = choose_out_iface_garlic(it->second, priority);
-    if (out_garlic != nullptr) {
-      td::actor::send_closure(out_garlic->garlic_manager, &AdnlGarlicManager::send_packet, src_id, dst_addr,
-                              std::move(data));
+    auto out_custom = choose_out_iface_custom(it->second, priority);
+    if (out_custom != nullptr) {
+      td::actor::send_closure(out_custom->sender, &CustomSender::send_packet, src_id, dst_addr, std::move(data));
       return;
     }
     VLOG(ADNL_WARNING) << this << ": dropping OUT message [" << src_id << "->" << dst_id << "]: no out rules";

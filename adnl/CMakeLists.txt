@@ -31,8 +31,6 @@ set(ADNL_HEADERS
   adnl-proxy-types.hpp
   adnl.h
   utils.hpp
-  adnl-garlic-server.hpp
-  adnl-tunnel.h
 )
 set(ADNL_SOURCE
   adnl-address-list.cpp
@@ -53,9 +51,6 @@ set(ADNL_SOURCE
   adnl-static-nodes.cpp
   adnl-proxy-types.cpp
   utils.cpp
-  adnl-garlic-server.cpp
-  adnl-tunnel.cpp
-  adnl-garlic-manager.cpp
   ${ADNL_HEADERS})
 
 set(ADNL_TEST_SOURCE
@@ -103,6 +98,8 @@ target_link_libraries(adnl-pong PUBLIC tdactor ton_crypto tl_api tdnet common
 add_library(adnltest STATIC ${ADNL_TEST_SOURCE})
 target_include_directories(adnltest PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>)
 target_link_libraries(adnltest PUBLIC adnl )
+
+add_subdirectory(garlic)
 endif()
 #END internal
 
