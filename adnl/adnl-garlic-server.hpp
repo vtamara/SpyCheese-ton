@@ -38,6 +38,7 @@ class AdnlGarlicServer : public td::actor::Actor {
 
   void start_up() override;
   void tear_down() override;
+  void alarm() override;
 
  private:
   AdnlNodeIdShort local_id_;
@@ -48,6 +49,7 @@ class AdnlGarlicServer : public td::actor::Actor {
   struct TunnelMidpoint {
     td::actor::ActorOwn<AdnlInboundTunnelMidpoint> actor;
     AdnlSubscribeGuard guard;
+    td::Timestamp ttl;
   };
   std::map<td::Bits256, TunnelMidpoint> tunnels_;
 
@@ -58,6 +60,9 @@ class AdnlGarlicServer : public td::actor::Actor {
   void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_forwardToUdp& obj);
   void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_forwardToNext& obj);
   void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_createTunnelMidpoint& obj);
+  void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_ping& obj);
+
+  void update_ttl(td::Bits256 id);
 };
 
 }  // namespace adnl

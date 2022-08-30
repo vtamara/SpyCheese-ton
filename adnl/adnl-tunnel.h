@@ -36,9 +36,20 @@ class AdnlInboundTunnelPoint : public AdnlTunnel {
 
 class AdnlInboundTunnelEndpoint : public AdnlInboundTunnelPoint {
  public:
-  AdnlInboundTunnelEndpoint(std::vector<PublicKeyHash> decrypt_via, td::actor::ActorId<keyring::Keyring> keyring,
+  class Callback {
+   public:
+    virtual ~Callback() = default;
+    virtual void receive_custom_message(size_t sender_id, td::BufferSlice data) = 0;
+  };
+
+  AdnlInboundTunnelEndpoint(std::vector<PublicKeyHash> decrypt_via, AdnlCategoryMask cat_mask,
+                            std::unique_ptr<Callback> callback, td::actor::ActorId<keyring::Keyring> keyring,
                             td::actor::ActorId<AdnlPeerTable> adnl)
-      : decrypt_via_(std::move(decrypt_via)), keyring_(std::move(keyring)), adnl_(std::move(adnl)) {
+      : decrypt_via_(std::move(decrypt_via))
+      , cat_mask_(cat_mask)
+      , callback_(std::move(callback))
+      , keyring_(std::move(keyring))
+      , adnl_(std::move(adnl)) {
   }
 
   void receive_packet(AdnlNodeIdShort src, td::IPAddress src_addr, td::BufferSlice datagram) override;
@@ -47,6 +58,8 @@ class AdnlInboundTunnelEndpoint : public AdnlInboundTunnelPoint {
 
  private:
   std::vector<PublicKeyHash> decrypt_via_;
+  AdnlCategoryMask cat_mask_;
+  std::unique_ptr<Callback> callback_;
   td::actor::ActorId<keyring::Keyring> keyring_;
   td::actor::ActorId<AdnlPeerTable> adnl_;
 };
@@ -59,6 +72,7 @@ class AdnlInboundTunnelMidpoint : public AdnlInboundTunnelPoint {
   }
   void start_up() override;
   void receive_packet(AdnlNodeIdShort src, td::IPAddress src_addr, td::BufferSlice datagram) override;
+  void send_custom_message(td::BufferSlice data);
 
  private:
   ton::PublicKeyHash encrypt_key_hash_;

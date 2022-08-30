@@ -26,8 +26,10 @@ static const std::vector<std::string> PREFIXES = {
     Adnl::int_to_bytestring(ton_api::adnl_garlic_forwardToNext::ID),
     Adnl::int_to_bytestring(ton_api::adnl_garlic_createTunnelMidpoint::ID),
     Adnl::int_to_bytestring(ton_api::adnl_garlic_multipleMessages::ID),
-    Adnl::int_to_bytestring(ton_api::adnl_garlic_encryptedMessage::ID)
+    Adnl::int_to_bytestring(ton_api::adnl_garlic_encryptedMessage::ID),
+    Adnl::int_to_bytestring(ton_api::adnl_garlic_ping::ID)
 };
+static const double TUNNEL_TTL = 300.0;
 
 void AdnlGarlicServer::start_up() {
   class Callback : public Adnl::Callback {
@@ -46,6 +48,7 @@ void AdnlGarlicServer::start_up() {
   for (const auto& p : PREFIXES) {
     td::actor::send_closure(adnl_, &Adnl::subscribe, local_id_, p, std::make_unique<Callback>(actor_id(this)));
   }
+  alarm_timestamp() = td::Timestamp::in(60.0);
 }
 
 void AdnlGarlicServer::tear_down() {
@@ -113,24 +116,63 @@ void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic
 
   class Callback : public Adnl::Callback {
    public:
-    Callback(td::actor::ActorId<AdnlInboundTunnelMidpoint> id) : id_(id) {
+    Callback(td::actor::ActorId<AdnlGarlicServer> actor, td::actor::ActorId<AdnlInboundTunnelMidpoint> tunnel,
+             td::Bits256 id)
+        : actor_(std::move(actor)), tunnel_(std::move(tunnel)), id_(id) {
     }
     void receive_message(AdnlNodeIdShort src, AdnlNodeIdShort dst, td::BufferSlice data) override {
-      td::actor::send_closure(id_, &AdnlInboundTunnelMidpoint::receive_packet, src, td::IPAddress(), std::move(data));
+      td::actor::send_closure(tunnel_, &AdnlInboundTunnelMidpoint::receive_packet, src, td::IPAddress(),
+                              std::move(data));
+      td::actor::send_closure(actor_, &AdnlGarlicServer::update_ttl, id_);
     }
     void receive_query(AdnlNodeIdShort src, AdnlNodeIdShort dst, td::BufferSlice data,
                        td::Promise<td::BufferSlice> promise) override {
     }
+
    private:
-    td::actor::ActorId<AdnlInboundTunnelMidpoint> id_;
+    td::actor::ActorId<AdnlGarlicServer> actor_;
+    td::actor::ActorId<AdnlInboundTunnelMidpoint> tunnel_;
+    td::Bits256 id_;
   };
   auto actor = td::actor::create_actor<AdnlInboundTunnelMidpoint>(
       "adnltunnel", PublicKey(obj.encrypt_via_), AdnlNodeIdShort(obj.proxy_to_), local_id_, keyring_, adnl_);
-  auto callback = std::make_unique<Callback>(actor.get());
+  auto callback = std::make_unique<Callback>(actor_id(this), actor.get(), obj.message_prefix_);
   td::BufferSlice prefix = create_serialize_tl_object<ton_api::adnl_tunnel_packetPrefix>(obj.message_prefix_);
   tunnels_.emplace(obj.message_prefix_,
                    TunnelMidpoint{std::move(actor),
-                                  AdnlSubscribeGuard(adnl_, local_id_, as_slice(prefix).str(), std::move(callback))});
+                                  AdnlSubscribeGuard(adnl_, local_id_, as_slice(prefix).str(), std::move(callback)),
+                                  td::Timestamp::in(TUNNEL_TTL)});
+}
+
+void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_ping& obj) {
+  auto it = tunnels_.find(obj.tunnel_id_);
+  if (it == tunnels_.end()) {
+    LOG(DEBUG) << "Unknown tunnel " << obj.tunnel_id_;
+    return;
+  }
+  it->second.ttl = td::Timestamp::in(TUNNEL_TTL);
+  td::actor::send_closure(it->second.actor, &AdnlInboundTunnelMidpoint::send_custom_message,
+                          create_serialize_tl_object<ton_api::adnl_garlic_pong>(obj.nonce_));
+}
+
+void AdnlGarlicServer::update_ttl(td::Bits256 id) {
+  auto it = tunnels_.find(id);
+  if (it == tunnels_.end()) {
+    return;
+  }
+  it->second.ttl = td::Timestamp::in(TUNNEL_TTL);
+}
+
+void AdnlGarlicServer::alarm() {
+  auto it = tunnels_.begin();
+  while (it != tunnels_.end()) {
+    if (it->second.ttl && it->second.ttl.is_in_past()) {
+      it = tunnels_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+  alarm_timestamp() = td::Timestamp::in(60.0);
 }
 
 }  // namespace adnl

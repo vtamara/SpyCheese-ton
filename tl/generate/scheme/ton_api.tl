@@ -97,17 +97,6 @@ adnl.packetContents
   rand2:bytes 
         = adnl.PacketContents;
 
-adnl.tunnelPacketContents 
-  rand1:bytes 
-  flags:# 
-  from_ip:flags.0?int
-  from_port:flags.0?int
-  message:flags.1?bytes 
-  statistics:flags.2?bytes
-  payment:flags.3?bytes
-  rand2:bytes 
-        = adnl.TunnelPacketContents;
-
 
 // flag 16 - packet is outbound
 // flag 17 - control packet
@@ -141,11 +130,28 @@ adnl.message.part hash:int256 total_size:int offset:int data:bytes = adnl.Messag
 
 adnl.tunnel.packetPrefix id:int256 = adnl.tunnel.PacketPrefix;
 
+adnl.tunnel.packetContents
+  rand1:bytes
+  flags:#
+  from_ip:flags.0?int
+  from_port:flags.0?int
+  message:flags.1?bytes
+  statistics:flags.2?bytes
+  payment:flags.3?bytes
+  rand2:bytes
+        = adnl.tunnel.PacketContents;
+
+adnl.tunnel.customMessage data:bytes = adnl.tunnel.CustomMessage;
+
 adnl.garlic.forwardToUdp flags:# ipv4:flags.0?int ipv6:flags.1?int128 port:int data:bytes = adnl.garlic.Message;
 adnl.garlic.forwardToNext dst:int256 encrypted_data:bytes = adnl.garlic.Message;
 adnl.garlic.createTunnelMidpoint encrypt_via:PublicKey proxy_to:int256 message_prefix:int256 = adnl.garlic.Message;
+adnl.garlic.ping tunnel_id:int256 nonce:int256 = adnl.garlic.Message;
+
 adnl.garlic.multipleMessages messages:(vector adnl.garlic.Message) = adnl.garlic.Message;
 adnl.garlic.encryptedMessage data:bytes = adnl.garlic.Message;
+
+adnl.garlic.pong nonce:int256 = adnl.garlic.QueryAnswer;
 
 ---functions---
 

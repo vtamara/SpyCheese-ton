@@ -59,8 +59,15 @@ void AdnlInboundTunnelEndpoint::decrypted_packet(AdnlNodeIdShort src, td::IPAddr
     td::actor::send_closure(adnl_, &AdnlPeerTable::receive_packet, src_addr, cat_mask, std::move(data));
     return;
   }
-  auto F = fetch_tl_object<ton_api::adnl_tunnelPacketContents>(std::move(data), true);
+  auto F = fetch_tl_object<ton_api::adnl_tunnel_packetContents>(data, true);
   if (F.is_error()) {
+    auto F2 = fetch_tl_object<ton_api::adnl_tunnel_customMessage>(data, true);
+    if (F2.is_ok()) {
+      if (callback_) {
+        callback_->receive_custom_message(idx, std::move(F2.ok()->data_));
+      }
+      return;
+    }
     VLOG(ADNL_INFO) << "dropping tunnel packet: failed to fetch: " << F.move_as_error();
     return;
   }
@@ -89,7 +96,7 @@ void AdnlInboundTunnelMidpoint::receive_packet(AdnlNodeIdShort src, td::IPAddres
   if (!encryptor_) {
     return;
   }
-  auto obj = create_tl_object<ton_api::adnl_tunnelPacketContents>();
+  auto obj = create_tl_object<ton_api::adnl_tunnel_packetContents>();
   obj->flags_ = 2;
   obj->message_ = std::move(datagram);
   if (src_addr.is_valid() && src_addr.is_ipv4()) {
@@ -106,6 +113,22 @@ void AdnlInboundTunnelMidpoint::receive_packet(AdnlNodeIdShort src, td::IPAddres
   td::BufferSlice enc = create_serialize_tl_object_suffix<ton_api::adnl_tunnel_packetPrefix>(
       data.as_slice(), encrypt_key_hash_.bits256_value());
 
+  td::actor::send_closure(adnl_, &Adnl::send_message_ex, proxy_as_, proxy_to_, std::move(enc),
+                          Adnl::SendFlags::direct_only);
+}
+
+void AdnlInboundTunnelMidpoint::send_custom_message(td::BufferSlice data) {
+  if (!encryptor_) {
+    return;
+  }
+  data = create_serialize_tl_object<ton_api::adnl_tunnel_customMessage>(std::move(data));
+  auto dataR = encryptor_->encrypt(data.as_slice());
+  if (dataR.is_error()) {
+    return;
+  }
+  data = dataR.move_as_ok();
+  td::BufferSlice enc = create_serialize_tl_object_suffix<ton_api::adnl_tunnel_packetPrefix>(
+      data.as_slice(), encrypt_key_hash_.bits256_value());
   td::actor::send_closure(adnl_, &Adnl::send_message_ex, proxy_as_, proxy_to_, std::move(enc),
                           Adnl::SendFlags::direct_only);
 }

@@ -37,6 +37,8 @@ class AdnlGarlicManager : public td::actor::Actor {
 
   void create_secret_id(AdnlNodeIdFull id, td::Promise<td::Unit> promise);
 
+  void alarm() override;
+
  private:
   AdnlNodeIdShort local_id_;
   td::uint8 adnl_cat_;
@@ -53,8 +55,14 @@ class AdnlGarlicManager : public td::actor::Actor {
     std::vector<AdnlNodeIdShort> chain;
     std::vector<std::unique_ptr<Encryptor>> encryptors;
     td::actor::ActorOwn<AdnlInboundTunnelEndpoint> endpoint;
+    std::vector<PublicKey> pubkeys;
     AdnlSubscribeGuard guard;
     AdnlAddressList addr_list;
+
+    bool ready = false;
+    td::Promise<td::Unit> ready_promise;
+    td::Bits256 init_nonce;
+    td::Timestamp ready_ttl;
   };
   std::unique_ptr<Connection> connection_;
 
@@ -63,8 +71,12 @@ class AdnlGarlicManager : public td::actor::Actor {
   };
   std::map<AdnlNodeIdShort, SecretId> secret_ids_;
 
-  td::Result<std::unique_ptr<Connection>> create_connection(std::vector<AdnlNodeIdShort> chain);
   void update_addr_lists();
+
+  void receive_custom_message(size_t sender_id, td::BufferSlice data);
+
+  void wrap_send_message(const Connection& connection, std::vector<tl_object_ptr<ton_api::adnl_garlic_Message>> msgs);
+  void wrap_send_message(const Connection& connection, tl_object_ptr<ton_api::adnl_garlic_Message> msg);
 };
 
 }  // namespace adnl
