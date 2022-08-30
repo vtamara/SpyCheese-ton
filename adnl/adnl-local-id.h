@@ -45,8 +45,10 @@ class AdnlLocalId : public td::actor::Actor {
 
   void update_dht_node(td::actor::ActorId<dht::Dht> dht_node) {
     dht_node_ = dht_node;
-
     publish_address_list();
+  }
+  void get_dht_node(td::Promise<td::actor::ActorId<dht::Dht>> promise) {
+    promise.set_result(dht_node_);
   }
 
   void decrypt(td::BufferSlice data, td::Promise<AdnlPacket> promise);

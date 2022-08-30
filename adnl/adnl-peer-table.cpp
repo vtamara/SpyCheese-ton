@@ -213,9 +213,13 @@ void AdnlPeerTableImpl::add_id_ex(AdnlNodeIdFull id, AdnlAddressList addr_list, 
     }
     td::actor::send_closure(it->second.local_id, &AdnlLocalId::update_address_list, std::move(addr_list));
   } else {
+    td::actor::ActorId<dht::Dht> dht_node;
+    if (!(mode & (td::uint32)AdnlLocalIdMode::custom_dht_node)) {
+      dht_node = dht_node_;
+    }
     local_ids_.emplace(
         a, LocalIdInfo{td::actor::create_actor<AdnlLocalId>("localid", std::move(id), std::move(addr_list), mode,
-                                                            actor_id(this), keyring_, dht_node_),
+                                                            actor_id(this), keyring_, std::move(dht_node)),
                        cat, mode});
     if (!network_manager_.empty()) {
       td::actor::send_closure(network_manager_, &AdnlNetworkManager::set_local_id_category, a, cat);
@@ -251,7 +255,25 @@ void AdnlPeerTableImpl::register_dht_node(td::actor::ActorId<dht::Dht> dht_node)
     td::actor::send_closure(peer.second, &AdnlPeer::update_dht_node, dht_node_);
   }
   for (auto &local_id : local_ids_) {
-    td::actor::send_closure(local_id.second.local_id, &AdnlLocalId::update_dht_node, dht_node_);
+    if (!(local_id.second.mode & (td::uint32)AdnlLocalIdMode::custom_dht_node)) {
+      td::actor::send_closure(local_id.second.local_id, &AdnlLocalId::update_dht_node, dht_node_);
+    }
+  }
+}
+
+void AdnlPeerTableImpl::set_custom_dht_node(AdnlNodeIdShort local_id, td::actor::ActorId<dht::Dht> dht_node) {
+  auto it = local_ids_.find(local_id);
+  if (it == local_ids_.end()) {
+    LOG(ERROR) << this << "unknown local id " << local_id;
+    return;
+  }
+  if (!(it->second.mode & (td::uint32)AdnlLocalIdMode::custom_dht_node)) {
+    LOG(ERROR) << this << "local id " << local_id << " does not use custom dht mode";
+    return;
+  }
+  td::actor::send_closure(it->second.local_id, &AdnlLocalId::update_dht_node, dht_node);
+  for (auto &peer : peers_) {
+    td::actor::send_closure(peer.second, &AdnlPeer::set_custom_dht_node, local_id, dht_node);
   }
 }
 
@@ -374,7 +396,7 @@ void AdnlPeerTableImpl::create_ext_server(std::vector<AdnlNodeIdShort> ids, std:
 
 void AdnlPeerTableImpl::create_garlic_manager(AdnlNodeIdShort local_id, td::uint8 cat,
                                               td::Promise<td::actor::ActorId<AdnlGarlicManager>> promise) {
-  auto actor = td::actor::create_actor<AdnlGarlicManager>("adnlgarlicmanager", local_id, cat, actor_id(this), keyring_);
+  auto actor = td::actor::create_actor<AdnlGarlicManager>("adnlgarlicmanager", local_id, cat, actor_id(this), keyring_, nullptr);
   auto id = actor.get();
   AdnlCategoryMask cat_mask;
   cat_mask.set(cat);

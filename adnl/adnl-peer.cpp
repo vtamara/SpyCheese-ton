@@ -36,6 +36,15 @@ static_assert(AdnlPeerPairImpl::get_mtu() + AdnlPeerPairImpl::packet_header_max_
               "wrong mtu configuration");
 
 void AdnlPeerPairImpl::start_up() {
+  if (mode_ & (td::uint32)AdnlLocalIdMode::custom_dht_node) {
+    td::actor::send_closure(local_actor_, &AdnlLocalId::get_dht_node,
+                            [SelfId = actor_id(this)](td::Result<td::actor::ActorId<dht::Dht>> R) {
+                              if (R.is_ok()) {
+                                td::actor::send_closure(SelfId, &AdnlPeerPairImpl::update_dht_node, R.move_as_ok(),
+                                                        true);
+                              }
+                            });
+  }
   auto P1 = td::PromiseCreator::lambda([SelfId = actor_id(this)](td::Result<AdnlDbItem> R) {
     td::actor::send_closure(SelfId, &AdnlPeerPairImpl::got_data_from_db, std::move(R));
   });
@@ -455,7 +464,9 @@ AdnlPeerPairImpl::AdnlPeerPairImpl(td::actor::ActorId<AdnlNetworkManager> networ
   peer_table_ = peer_table;
   local_actor_ = local_actor;
   peer_ = peer;
-  dht_node_ = dht_node;
+  if (!(local_mode & (td::uint32)AdnlLocalIdMode::custom_dht_node)) {
+    dht_node_ = dht_node;
+  }
   mode_ = local_mode;
 
   local_id_ = local_id;
@@ -865,8 +876,15 @@ void AdnlPeerImpl::del_local_id(AdnlNodeIdShort local_id) {
 
 void AdnlPeerImpl::update_dht_node(td::actor::ActorId<dht::Dht> dht_node) {
   dht_node_ = dht_node;
-  for (auto it = peer_pairs_.begin(); it != peer_pairs_.end(); it++) {
-    td::actor::send_closure(it->second, &AdnlPeerPair::update_dht_node, dht_node_);
+  for (auto& peer_pair : peer_pairs_) {
+    td::actor::send_closure(peer_pair.second, &AdnlPeerPair::update_dht_node, dht_node_, false);
+  }
+}
+
+void AdnlPeerImpl::set_custom_dht_node(AdnlNodeIdShort local_id, td::actor::ActorId<dht::Dht> dht_node) {
+  auto it = peer_pairs_.find(local_id);
+  if (it != peer_pairs_.end()) {
+    td::actor::send_closure(it->second, &AdnlPeerPair::update_dht_node, std::move(dht_node), true);
   }
 }
 

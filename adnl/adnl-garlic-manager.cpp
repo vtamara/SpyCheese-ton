@@ -26,8 +26,33 @@ namespace adnl {
 
 AdnlGarlicManager::AdnlGarlicManager(AdnlNodeIdShort local_id, td::uint8 adnl_cat,
                                      td::actor::ActorId<AdnlPeerTable> adnl,
-                                     td::actor::ActorId<keyring::Keyring> keyring)
-    : local_id_(local_id), adnl_cat_(adnl_cat), adnl_(std::move(adnl)), keyring_(std::move(keyring)) {
+                                     td::actor::ActorId<keyring::Keyring> keyring,
+                                     std::shared_ptr<dht::DhtGlobalConfig> dht_config)
+    : local_id_(local_id)
+    , adnl_cat_(adnl_cat)
+    , adnl_(std::move(adnl))
+    , keyring_(std::move(keyring))
+    , dht_config_(std::move(dht_config)) {
+}
+
+void AdnlGarlicManager::start_up() {
+  // Creating DHT node
+  if (use_secret_dht()) {
+    auto pk = ton::PrivateKey{ton::privkeys::Ed25519::random()};
+    auto pub = pk.compute_public_key();
+    td::actor::send_closure(keyring_, &ton::keyring::Keyring::add_key, pk, true, [](td::Unit) {});
+    auto dht_id = AdnlNodeIdFull(pub);
+    create_secret_id(dht_id, [](td::Result<td::Unit>) {});
+    auto R = dht::Dht::create_client(dht_id.compute_short_id(), "", dht_config_, keyring_, adnl_);
+    if (R.is_error()) {
+      LOG(ERROR) << "Failed to create secret DHT node: " << R.move_as_error();
+      return;
+    }
+    secret_dht_node_ = R.move_as_ok();
+    for (const auto& id : secret_ids_) {
+      td::actor::send_closure(adnl_, &Adnl::set_custom_dht_node, id.first, secret_dht_node_.get());
+    }
+  }
 }
 
 void AdnlGarlicManager::send_packet(AdnlNodeIdShort src, td::IPAddress dst_ip, td::BufferSlice data) {
@@ -69,8 +94,10 @@ void AdnlGarlicManager::create_secret_id(AdnlNodeIdFull id, td::Promise<td::Unit
   }
   secret_ids_[id_short].id_full = id;
   auto addr_list = connection_ && connection_->ready ? connection_->addr_list : AdnlAddressList();
-  td::actor::send_closure(adnl_, &Adnl::add_id_ex, std::move(id), std::move(addr_list), adnl_cat_,
-                          (td::uint32)AdnlLocalIdMode::send_ignore_remote_addr);
+  td::actor::send_closure(adnl_, &Adnl::add_id_ex, std::move(id), std::move(addr_list), adnl_cat_, local_id_mode());
+  if (use_secret_dht() && !secret_dht_node_.empty()) {
+    td::actor::send_closure(adnl_, &Adnl::set_custom_dht_node, id_short, secret_dht_node_.get());
+  }
   promise.set_result(td::Unit());
 }
 
@@ -202,8 +229,7 @@ void AdnlGarlicManager::alarm() {
 void AdnlGarlicManager::update_addr_lists() {
   auto addr_list = connection_ && connection_->ready ? connection_->addr_list : AdnlAddressList();
   for (const auto& p : secret_ids_) {
-    td::actor::send_closure(adnl_, &Adnl::add_id_ex, p.second.id_full, addr_list, adnl_cat_,
-                            (td::uint32)AdnlLocalIdMode::send_ignore_remote_addr);
+    td::actor::send_closure(adnl_, &Adnl::add_id_ex, p.second.id_full, addr_list, adnl_cat_, local_id_mode());
   }
 }
 

@@ -34,7 +34,12 @@ class Dht;
 
 namespace adnl {
 
-enum class AdnlLocalIdMode : td::uint32 { direct_only = 1, drop_from_net = 2, send_ignore_remote_addr = 4 };
+enum class AdnlLocalIdMode : td::uint32 {
+  direct_only = 1,
+  drop_from_net = 2,
+  send_ignore_remote_addr = 4,
+  custom_dht_node = 8
+};
 
 class AdnlNetworkManager;
 
@@ -108,6 +113,7 @@ class Adnl : public AdnlSenderInterface {
   //   - discover node addr list for unknown node
   //   - update local node information
   virtual void register_dht_node(td::actor::ActorId<dht::Dht> dht_node) = 0;
+  virtual void set_custom_dht_node(AdnlNodeIdShort local_id, td::actor::ActorId<dht::Dht> dht_node) = 0;
   virtual void register_network_manager(td::actor::ActorId<AdnlNetworkManager> network_manager) = 0;
 
   // get local id information

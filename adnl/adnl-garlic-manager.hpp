@@ -21,6 +21,7 @@
 #include "adnl-peer-table.h"
 #include "keys/encryptor.h"
 #include "utils.hpp"
+#include "dht/dht.h"
 
 namespace ton {
 
@@ -29,8 +30,9 @@ namespace adnl {
 class AdnlGarlicManager : public td::actor::Actor {
  public:
   AdnlGarlicManager(AdnlNodeIdShort local_id, td::uint8 adnl_cat, td::actor::ActorId<AdnlPeerTable> adnl,
-                    td::actor::ActorId<keyring::Keyring> keyring);
+                    td::actor::ActorId<keyring::Keyring> keyring, std::shared_ptr<dht::DhtGlobalConfig> dht_config);
 
+  void start_up() override;
   void send_packet(AdnlNodeIdShort src, td::IPAddress dst_ip, td::BufferSlice data);
   void add_server(AdnlNodeIdFull server);
   void init_connection(size_t chain_length, td::Promise<td::Unit> promise);
@@ -44,6 +46,7 @@ class AdnlGarlicManager : public td::actor::Actor {
   td::uint8 adnl_cat_;
   td::actor::ActorId<AdnlPeerTable> adnl_;
   td::actor::ActorId<keyring::Keyring> keyring_;
+  std::shared_ptr<dht::DhtGlobalConfig> dht_config_;
 
   struct Server {
     AdnlNodeIdFull id_full;
@@ -70,6 +73,15 @@ class AdnlGarlicManager : public td::actor::Actor {
     AdnlNodeIdFull id_full;
   };
   std::map<AdnlNodeIdShort, SecretId> secret_ids_;
+  td::actor::ActorOwn<dht::Dht> secret_dht_node_;
+
+  bool use_secret_dht() const {
+    return dht_config_ != nullptr;
+  }
+  td::uint32 local_id_mode() const {
+    return (td::uint32)AdnlLocalIdMode::send_ignore_remote_addr |
+           (use_secret_dht() ? (td::uint32)AdnlLocalIdMode::custom_dht_node : 0);
+  }
 
   void update_addr_lists();
 
