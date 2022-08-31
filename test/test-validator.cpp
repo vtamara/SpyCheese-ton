@@ -174,7 +174,7 @@ class TestNode : public td::actor::Actor {
     CHECK(dht_nodes_.size() > 0);
 
     td::actor::send_closure(adnl_, &ton::adnl::Adnl::register_dht_node, dht_nodes_[0].get());
-    overlay_manager_ = ton::overlay::Overlays::create(db_root_, keyring_.get(), adnl_.get(), dht_nodes_[0].get());
+    overlay_manager_ = ton::overlay::Overlays::create(db_root_, keyring_.get(), adnl_.get());
 
     CHECK(lc.validators_.size() <= 1);
     CHECK(gc.validators_.size() <= 1);

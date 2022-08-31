@@ -43,12 +43,10 @@ class Overlay;
 
 class OverlayManager : public Overlays {
  public:
-  OverlayManager(std::string db_root, td::actor::ActorId<keyring::Keyring> keyring, td::actor::ActorId<adnl::Adnl> adnl,
-                 td::actor::ActorId<dht::Dht> dht);
+  OverlayManager(std::string db_root, td::actor::ActorId<keyring::Keyring> keyring,
+                 td::actor::ActorId<adnl::Adnl> adnl);
   void start_up() override;
   void save_to_db(adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay_id, std::vector<OverlayNode> nodes);
-
-  void update_dht_node(td::actor::ActorId<dht::Dht> dht) override;
 
   void create_public_overlay(adnl::AdnlNodeIdShort local_id, OverlayIdFull overlay_id,
                              std::unique_ptr<Callback> callback, OverlayPrivacyRules rules, td::string scope) override;
@@ -111,7 +109,6 @@ class OverlayManager : public Overlays {
 
   td::actor::ActorId<keyring::Keyring> keyring_;
   td::actor::ActorId<adnl::Adnl> adnl_;
-  td::actor::ActorId<dht::Dht> dht_node_;
 
   using DbType = td::KeyValueAsync<td::Bits256, td::BufferSlice>;
   DbType db_;

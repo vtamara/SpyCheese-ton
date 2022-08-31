@@ -258,7 +258,7 @@ class TestNode : public td::actor::Actor {
     td::actor::send_closure(adnl_, &ton::adnl::Adnl::register_dht_node, dht_nodes_[0].get());
     //td::actor::send_closure(overlay_manager_, &ton::overlay::Overlays::register_dht_node, dht_nodes_[0].get());
 
-    overlay_manager_ = ton::overlay::Overlays::create(adnl_.get(), dht_nodes_[0].get());
+    overlay_manager_ = ton::overlay::Overlays::create(adnl_.get());
 
     for (auto &it : lc.public_overlays_) {
       if (it->get_id() == ton::ton_api::overlay_config_local::ID) {

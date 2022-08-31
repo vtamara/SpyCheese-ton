@@ -275,6 +275,16 @@ void AdnlPeerTableImpl::set_custom_dht_node(AdnlNodeIdShort local_id, td::actor:
   }
 }
 
+void AdnlPeerTableImpl::get_local_id_dht_node(AdnlNodeIdShort local_id,
+                                              td::Promise<td::actor::ActorId<dht::Dht>> promise) {
+  auto it = local_ids_.find(local_id);
+  if (it == local_ids_.end()) {
+    promise.set_error(td::Status::Error("unknown local id"));
+    return;
+  }
+  td::actor::send_closure(it->second.local_id, &AdnlLocalId::get_dht_node, std::move(promise));
+}
+
 void AdnlPeerTableImpl::register_network_manager(td::actor::ActorId<AdnlNetworkManager> network_manager) {
   network_manager_ = std::move(network_manager);
 

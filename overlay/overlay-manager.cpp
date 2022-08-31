@@ -38,15 +38,6 @@ namespace ton {
 
 namespace overlay {
 
-void OverlayManager::update_dht_node(td::actor::ActorId<dht::Dht> dht) {
-  dht_node_ = dht;
-  for (auto &X : overlays_) {
-    for (auto &Y : X.second) {
-      td::actor::send_closure(Y.second, &Overlay::update_dht_node, dht);
-    }
-  }
-}
-
 void OverlayManager::register_overlay(adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay_id,
                                       td::actor::ActorOwn<Overlay> overlay) {
   auto it = overlays_.find(local_id);
@@ -91,20 +82,18 @@ void OverlayManager::delete_overlay(adnl::AdnlNodeIdShort local_id, OverlayIdSho
 
 void OverlayManager::create_public_overlay(adnl::AdnlNodeIdShort local_id, OverlayIdFull overlay_id,
                                            std::unique_ptr<Callback> callback, OverlayPrivacyRules rules, td::string scope) {
-  CHECK(!dht_node_.empty());
   auto id = overlay_id.compute_short_id();
   register_overlay(local_id, id,
-                   Overlay::create(keyring_, adnl_, actor_id(this), dht_node_, local_id, std::move(overlay_id),
+                   Overlay::create(keyring_, adnl_, actor_id(this), local_id, std::move(overlay_id),
                                    std::move(callback), std::move(rules), scope));
 }
 
 void OverlayManager::create_public_overlay_external(adnl::AdnlNodeIdShort local_id, OverlayIdFull overlay_id,
                                                     std::unique_ptr<Callback> callback, OverlayPrivacyRules rules,
                                                     td::string scope) {
-  CHECK(!dht_node_.empty());
   auto id = overlay_id.compute_short_id();
   register_overlay(local_id, id,
-                   Overlay::create(keyring_, adnl_, actor_id(this), dht_node_, local_id, std::move(overlay_id),
+                   Overlay::create(keyring_, adnl_, actor_id(this), local_id, std::move(overlay_id),
                                    std::move(callback), std::move(rules), scope, true));
 }
 
@@ -113,7 +102,7 @@ void OverlayManager::create_private_overlay(adnl::AdnlNodeIdShort local_id, Over
                                             std::unique_ptr<Callback> callback, OverlayPrivacyRules rules) {
   auto id = overlay_id.compute_short_id();
   register_overlay(local_id, id,
-                   Overlay::create(keyring_, adnl_, actor_id(this), dht_node_, local_id, std::move(overlay_id),
+                   Overlay::create(keyring_, adnl_, actor_id(this), local_id, std::move(overlay_id),
                                    std::move(nodes), std::move(callback), std::move(rules)));
 }
 
@@ -288,13 +277,13 @@ void OverlayManager::get_overlay_random_peers_full(adnl::AdnlNodeIdShort local_i
 }
 
 td::actor::ActorOwn<Overlays> Overlays::create(std::string db_root, td::actor::ActorId<keyring::Keyring> keyring,
-                                               td::actor::ActorId<adnl::Adnl> adnl, td::actor::ActorId<dht::Dht> dht) {
-  return td::actor::create_actor<OverlayManager>("overlaymanager", db_root, keyring, adnl, dht);
+                                               td::actor::ActorId<adnl::Adnl> adnl) {
+  return td::actor::create_actor<OverlayManager>("overlaymanager", db_root, keyring, adnl);
 }
 
 OverlayManager::OverlayManager(std::string db_root, td::actor::ActorId<keyring::Keyring> keyring,
-                               td::actor::ActorId<adnl::Adnl> adnl, td::actor::ActorId<dht::Dht> dht)
-    : db_root_(db_root), keyring_(keyring), adnl_(adnl), dht_node_(dht) {
+                               td::actor::ActorId<adnl::Adnl> adnl)
+    : db_root_(db_root), keyring_(keyring), adnl_(adnl) {
 }
 
 void OverlayManager::start_up() {

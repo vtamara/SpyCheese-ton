@@ -394,7 +394,7 @@ class StorageCli : public td::actor::Actor {
             .move_as_ok();
 
     send_closure(adnl_, &ton::Adnl::register_dht_node, dht_.get());
-    overlays_ = ton::overlay::Overlays::create(options_.db_root, keyring_.get(), adnl_.get(), dht_.get());
+    overlays_ = ton::overlay::Overlays::create(options_.db_root, keyring_.get(), adnl_.get());
   }
 
   void exit(td::Result<td::Unit> res) {

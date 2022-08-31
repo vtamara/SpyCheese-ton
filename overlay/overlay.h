@@ -40,17 +40,15 @@ class Overlay : public td::actor::Actor {
   static td::actor::ActorOwn<Overlay> create(td::actor::ActorId<keyring::Keyring> keyring,
                                              td::actor::ActorId<adnl::Adnl> adnl,
                                              td::actor::ActorId<OverlayManager> manager,
-                                             td::actor::ActorId<dht::Dht> dht_node, adnl::AdnlNodeIdShort local_id,
+                                             adnl::AdnlNodeIdShort local_id,
                                              OverlayIdFull overlay_id, std::unique_ptr<Overlays::Callback> callback,
                                              OverlayPrivacyRules rules, td::string scope, bool is_external = false);
   static td::actor::ActorOwn<Overlay> create(td::actor::ActorId<keyring::Keyring> keyring,
                                              td::actor::ActorId<adnl::Adnl> adnl,
                                              td::actor::ActorId<OverlayManager> manager,
-                                             td::actor::ActorId<dht::Dht> dht_node, adnl::AdnlNodeIdShort local_id,
+                                             adnl::AdnlNodeIdShort local_id,
                                              OverlayIdFull overlay_id, std::vector<adnl::AdnlNodeIdShort> nodes,
                                              std::unique_ptr<Overlays::Callback> callback, OverlayPrivacyRules rules);
-
-  virtual void update_dht_node(td::actor::ActorId<dht::Dht> dht) = 0;
 
   virtual void receive_message(adnl::AdnlNodeIdShort src, td::BufferSlice data) = 0;
   virtual void receive_query(adnl::AdnlNodeIdShort src, td::BufferSlice data, td::Promise<td::BufferSlice> promise) = 0;

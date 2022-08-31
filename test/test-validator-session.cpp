@@ -268,8 +268,7 @@ class TestNode : public td::actor::Actor {
     td::actor::send_closure(adnl_, &ton::adnl::Adnl::register_dht_node, dht_nodes_[0].get());
     //td::actor::send_closure(overlay_manager_, &ton::overlay::Overlays::register_dht_node, dht_nodes_[0].get());
 
-    overlay_manager_ =
-        ton::overlay::Overlays::create("/var/ton-work/db.overlays", keyring_.get(), adnl_.get(), dht_nodes_[0].get());
+    overlay_manager_ = ton::overlay::Overlays::create("/var/ton-work/db.overlays", keyring_.get(), adnl_.get());
 
     //auto C = ton::CatChainActor::create(nullptr, adnl_.get(), overlay_manager_.get(),
     //                                    std::vector<ton::tl_object_ptr<ton::ton_api::adnl_id_Full>>());

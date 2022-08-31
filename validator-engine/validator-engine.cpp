@@ -1752,7 +1752,7 @@ void ValidatorEngine::started_rldp() {
 void ValidatorEngine::start_overlays() {
   if (!default_dht_node_.is_zero()) {
     overlay_manager_ =
-        ton::overlay::Overlays::create(db_root_, keyring_.get(), adnl_.get(), dht_nodes_[default_dht_node_].get());
+        ton::overlay::Overlays::create(db_root_, keyring_.get(), adnl_.get());
   }
   started_overlays();
 }
@@ -2135,7 +2135,6 @@ void ValidatorEngine::try_del_dht_node(ton::PublicKeyHash pub, td::Promise<td::U
     auto d = dht_nodes_[default_dht_node_].get();
     CHECK(!d.empty());
     td::actor::send_closure(adnl_, &ton::adnl::Adnl::register_dht_node, d);
-    td::actor::send_closure(overlay_manager_, &ton::overlay::Overlays::update_dht_node, d);
     if (!full_node_.empty()) {
       td::actor::send_closure(full_node_, &ton::validator::fullnode::FullNode::update_dht_node, d);
     }

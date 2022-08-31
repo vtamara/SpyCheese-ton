@@ -236,8 +236,7 @@ int main(int argc, char *argv[]) {
     keyring = ton::keyring::Keyring::create(db_root_);
     network_manager = td::actor::create_actor<ton::adnl::TestLoopbackNetworkManager>("test net");
     adnl = ton::adnl::Adnl::create(db_root_, keyring.get());
-    overlay_manager =
-        ton::overlay::Overlays::create(db_root_, keyring.get(), adnl.get(), td::actor::ActorId<ton::dht::Dht>{});
+    overlay_manager = ton::overlay::Overlays::create(db_root_, keyring.get(), adnl.get());
     td::actor::send_closure(adnl, &ton::adnl::Adnl::register_network_manager, network_manager.get());
   });
 

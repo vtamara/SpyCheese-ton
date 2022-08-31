@@ -70,6 +70,7 @@ class AdnlPeerTableImpl : public AdnlPeerTable {
   void unsubscribe(AdnlNodeIdShort dst, std::string prefix) override;
   void register_dht_node(td::actor::ActorId<dht::Dht> dht_node) override;
   void set_custom_dht_node(AdnlNodeIdShort local_id, td::actor::ActorId<dht::Dht> dht_node) override;
+  void get_local_id_dht_node(AdnlNodeIdShort local_id, td::Promise<td::actor::ActorId<dht::Dht>> promise) override;
   void register_network_manager(td::actor::ActorId<AdnlNetworkManager> network_manager) override;
   void get_addr_list(AdnlNodeIdShort id, td::Promise<AdnlAddressList> promise) override;
   void get_self_node(AdnlNodeIdShort id, td::Promise<AdnlNode> promise) override;

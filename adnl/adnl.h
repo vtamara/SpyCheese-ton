@@ -109,8 +109,10 @@ class Adnl : public AdnlSenderInterface {
   // there are two types of queries:
   //   - discover node addr list for unknown node
   //   - update local node information
+  // local_ids with flag custom_dht_node don't use the main node, the yse node provided by set_custom_dht_node
   virtual void register_dht_node(td::actor::ActorId<dht::Dht> dht_node) = 0;
   virtual void set_custom_dht_node(AdnlNodeIdShort local_id, td::actor::ActorId<dht::Dht> dht_node) = 0;
+  virtual void get_local_id_dht_node(AdnlNodeIdShort local_id, td::Promise<td::actor::ActorId<dht::Dht>> promise) = 0;
   virtual void register_network_manager(td::actor::ActorId<AdnlNetworkManager> network_manager) = 0;
 
   // get local id information

@@ -199,9 +199,7 @@ class Overlays : public td::actor::Actor {
   }
 
   static td::actor::ActorOwn<Overlays> create(std::string db_root, td::actor::ActorId<keyring::Keyring> keyring,
-                                              td::actor::ActorId<adnl::Adnl> adnl, td::actor::ActorId<dht::Dht> dht);
-
-  virtual void update_dht_node(td::actor::ActorId<dht::Dht> dht) = 0;
+                                              td::actor::ActorId<adnl::Adnl> adnl);
 
   virtual void create_public_overlay(adnl::AdnlNodeIdShort local_id, OverlayIdFull overlay_id,
                                      std::unique_ptr<Callback> callback, OverlayPrivacyRules rules, td::string scope) = 0;

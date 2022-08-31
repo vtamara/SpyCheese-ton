@@ -110,13 +110,9 @@ class OverlayPeer {
 class OverlayImpl : public Overlay {
  public:
   OverlayImpl(td::actor::ActorId<keyring::Keyring> keyring, td::actor::ActorId<adnl::Adnl> adnl,
-              td::actor::ActorId<OverlayManager> manager, td::actor::ActorId<dht::Dht> dht_node,
-              adnl::AdnlNodeIdShort local_id, OverlayIdFull overlay_id, bool pub,
-              std::vector<adnl::AdnlNodeIdShort> nodes, std::unique_ptr<Overlays::Callback> callback,
+              td::actor::ActorId<OverlayManager> manager, adnl::AdnlNodeIdShort local_id, OverlayIdFull overlay_id,
+              bool pub, std::vector<adnl::AdnlNodeIdShort> nodes, std::unique_ptr<Overlays::Callback> callback,
               OverlayPrivacyRules rules, td::string scope = "{ \"type\": \"undefined\" }", bool is_external = false);
-  void update_dht_node(td::actor::ActorId<dht::Dht> dht) override {
-    dht_node_ = dht;
-  }
 
   void receive_message(adnl::AdnlNodeIdShort src, td::BufferSlice data) override;
   void receive_query(adnl::AdnlNodeIdShort src, td::BufferSlice data, td::Promise<td::BufferSlice> promise) override;
@@ -289,7 +285,6 @@ class OverlayImpl : public Overlay {
   td::actor::ActorId<keyring::Keyring> keyring_;
   td::actor::ActorId<adnl::Adnl> adnl_;
   td::actor::ActorId<OverlayManager> manager_;
-  td::actor::ActorId<dht::Dht> dht_node_;
   adnl::AdnlNodeIdShort local_id_;
   OverlayIdFull id_full_;
   OverlayIdShort overlay_id_;
