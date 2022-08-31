@@ -60,6 +60,8 @@ class Overlay : public td::actor::Actor {
   virtual void print(td::StringBuilder &sb) = 0;
   virtual void get_overlay_random_peers(td::uint32 max_peers,
                                         td::Promise<std::vector<adnl::AdnlNodeIdShort>> promise) = 0;
+  virtual void get_overlay_random_peers_full(td::uint32 max_peers,
+                                             td::Promise<std::vector<adnl::AdnlNodeIdFull>> promise) = 0;
   virtual void add_certificate(PublicKeyHash key, std::shared_ptr<Certificate>) = 0;
   virtual void set_privacy_rules(OverlayPrivacyRules rules) = 0;
   virtual void receive_nodes_from_db(tl_object_ptr<ton_api::overlay_nodes> nodes) = 0;

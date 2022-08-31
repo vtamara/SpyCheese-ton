@@ -275,6 +275,18 @@ void OverlayManager::get_overlay_random_peers(adnl::AdnlNodeIdShort local_id, Ov
   }
 }
 
+void OverlayManager::get_overlay_random_peers_full(adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay_id,
+                                                   td::uint32 max_peers,
+                                                   td::Promise<std::vector<adnl::AdnlNodeIdFull>> promise) {
+  auto it = overlays_.find(local_id);
+  if (it != overlays_.end()) {
+    auto it2 = it->second.find(overlay_id);
+    if (it2 != it->second.end()) {
+      td::actor::send_closure(it2->second, &Overlay::get_overlay_random_peers_full, max_peers, std::move(promise));
+    }
+  }
+}
+
 td::actor::ActorOwn<Overlays> Overlays::create(std::string db_root, td::actor::ActorId<keyring::Keyring> keyring,
                                                td::actor::ActorId<adnl::Adnl> adnl, td::actor::ActorId<dht::Dht> dht) {
   return td::actor::create_actor<OverlayManager>("overlaymanager", db_root, keyring, adnl, dht);

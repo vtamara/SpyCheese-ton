@@ -142,6 +142,8 @@ class OverlayImpl : public Overlay {
   void send_random_peers(adnl::AdnlNodeIdShort dst, td::Promise<td::BufferSlice> promise);
   void send_random_peers_cont(adnl::AdnlNodeIdShort dst, OverlayNode node, td::Promise<td::BufferSlice> promise);
   void get_overlay_random_peers(td::uint32 max_peers, td::Promise<std::vector<adnl::AdnlNodeIdShort>> promise) override;
+  void get_overlay_random_peers_full(td::uint32 max_peers,
+                                     td::Promise<std::vector<adnl::AdnlNodeIdFull>> promise) override;
   void set_privacy_rules(OverlayPrivacyRules rules) override;
   void add_certificate(PublicKeyHash key, std::shared_ptr<Certificate> cert) override {
     certs_[key] = std::move(cert);
@@ -282,6 +284,7 @@ class OverlayImpl : public Overlay {
   void del_some_peers();
   void del_peer(adnl::AdnlNodeIdShort id);
   OverlayPeer *get_random_peer();
+  std::vector<OverlayPeer*> get_overlay_random_peers_impl(td::uint32 max_peers);
 
   td::actor::ActorId<keyring::Keyring> keyring_;
   td::actor::ActorId<adnl::Adnl> adnl_;

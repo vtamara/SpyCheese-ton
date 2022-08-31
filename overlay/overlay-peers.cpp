@@ -262,6 +262,23 @@ OverlayPeer *OverlayImpl::get_random_peer() {
 void OverlayImpl::get_overlay_random_peers(td::uint32 max_peers,
                                            td::Promise<std::vector<adnl::AdnlNodeIdShort>> promise) {
   std::vector<adnl::AdnlNodeIdShort> v;
+  for (auto p : get_overlay_random_peers_impl(max_peers)) {
+    v.push_back(p->get_id());
+  }
+  promise.set_result(std::move(v));
+}
+
+void OverlayImpl::get_overlay_random_peers_full(td::uint32 max_peers,
+                                                td::Promise<std::vector<adnl::AdnlNodeIdFull>> promise) {
+  std::vector<adnl::AdnlNodeIdFull> v;
+  for (auto p : get_overlay_random_peers_impl(max_peers)) {
+    v.push_back(p->get_full_id());
+  }
+  promise.set_result(std::move(v));
+}
+
+std::vector<OverlayPeer*> OverlayImpl::get_overlay_random_peers_impl(td::uint32 max_peers) {
+  std::vector<OverlayPeer*> v;
   auto t = td::Clocks::system();
   while (peers_.size() > v.size()) {
     auto P = peers_.get_random();
@@ -270,18 +287,18 @@ void OverlayImpl::get_overlay_random_peers(td::uint32 max_peers,
       del_peer(P->get_id());
     } else {
       bool dup = false;
-      for (auto &n : v) {
-        if (n == P->get_id()) {
+      for (auto n : v) {
+        if (n == P) {
           dup = true;
           continue;
         }
       }
       if (!dup) {
-        v.push_back(P->get_id());
+        v.push_back(P);
       }
     }
   }
-  promise.set_result(std::move(v));
+  return v;
 }
 
 void OverlayImpl::receive_nodes_from_db(tl_object_ptr<ton_api::overlay_nodes> tl_nodes) {

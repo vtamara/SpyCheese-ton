@@ -17,7 +17,6 @@
 #include "adnl-garlic-manager.hpp"
 #include "td/utils/Random.h"
 #include "adnl/adnl-address-list.hpp"
-#include "td/utils/overloaded.h"
 #include "auto/tl/ton_api.hpp"
 
 namespace ton {
@@ -27,21 +26,23 @@ namespace adnl {
 AdnlGarlicManager::AdnlGarlicManager(AdnlNodeIdShort local_id, td::uint8 adnl_cat,
                                      td::actor::ActorId<Adnl> adnl,
                                      td::actor::ActorId<keyring::Keyring> keyring,
+                                     td::actor::ActorId<overlay::Overlays> overlays,
                                      std::shared_ptr<dht::DhtGlobalConfig> dht_config)
     : local_id_(local_id)
     , adnl_cat_(adnl_cat)
     , adnl_(std::move(adnl))
     , keyring_(std::move(keyring))
+    , overlays_(std::move(overlays))
     , dht_config_(std::move(dht_config)) {
 }
 
 void AdnlGarlicManager::start_up() {
   // Creating DHT node
   if (use_secret_dht()) {
-    auto pk = ton::PrivateKey{ton::privkeys::Ed25519::random()};
-    auto pub = pk.compute_public_key();
-    td::actor::send_closure(keyring_, &ton::keyring::Keyring::add_key, pk, true, [](td::Unit) {});
-    auto dht_id = AdnlNodeIdFull(pub);
+    PrivateKey pk(privkeys::Ed25519::random());
+    PublicKey pub = pk.compute_public_key();
+    td::actor::send_closure(keyring_, &keyring::Keyring::add_key, pk, true, [](td::Unit) {});
+    AdnlNodeIdFull dht_id(pub);
     create_secret_id(dht_id, [](td::Result<td::Unit>) {});
     auto R = dht::Dht::create_client(dht_id.compute_short_id(), "", dht_config_, keyring_, adnl_);
     if (R.is_error()) {
@@ -53,37 +54,28 @@ void AdnlGarlicManager::start_up() {
       td::actor::send_closure(adnl_, &Adnl::set_custom_dht_node, id.first, secret_dht_node_.get());
     }
   }
+
+  td::Bits256 X = create_hash_tl_object<ton_api::adnl_garlic_publicOverlayId>();
+  td::BufferSlice b{32};
+  b.as_slice().copy_from(as_slice(X));
+  overlay_id_full_ = overlay::OverlayIdFull{std::move(b)};
+  overlay_id_ = overlay_id_full_.compute_short_id();
+  td::actor::send_closure(overlays_, &overlay::Overlays::create_public_overlay_external, local_id_,
+                          overlay_id_full_.clone(), std::make_unique<overlay::Overlays::EmptyCallback>(),
+                          overlay::OverlayPrivacyRules{}, R"({ "type": "garlic" })");
+  alarm();
+}
+
+void AdnlGarlicManager::tear_down() {
+  td::actor::send_closure(overlays_, &overlay::Overlays::delete_overlay, local_id_, overlay_id_);
 }
 
 void AdnlGarlicManager::send_packet(AdnlNodeIdShort src, td::IPAddress dst_ip, td::BufferSlice data) {
-  if (!connection_ || !connection_->ready) {
+  if (connection_.empty()) {
     LOG(DEBUG) << "Failed to send packet: connection is not ready";
     return;
   }
-  auto obj = create_tl_object<ton_api::adnl_garlic_forwardToUdp>();
-  if (dst_ip.is_ipv4()) {
-    obj->flags_ = obj->IPV4_MASK;
-    obj->ipv4_ = dst_ip.get_ipv4();
-  } else if (dst_ip.is_ipv6()) {
-    obj->flags_ = obj->IPV6_MASK;
-    obj->ipv6_ = td::Bits128((const unsigned char*)dst_ip.get_ipv6().data());
-  } else {
-    LOG(DEBUG) << "Failed to send packet: invalid dst_ip";
-    return;
-  }
-  obj->port_ = dst_ip.get_port();
-  obj->data_ = std::move(data);
-  wrap_send_message(*connection_, std::move(obj));
-}
-
-void AdnlGarlicManager::add_server(AdnlNodeIdFull server) {
-  AdnlNodeIdShort id = server.compute_short_id();
-  if (servers_.count(id)) {
-    LOG(DEBUG) << "Duplicate server " << id;
-    return;
-  }
-  servers_[id].id_full = server;
-  servers_vec_.push_back(id);
+  td::actor::send_closure(connection_, &Connection::send_packet, src, dst_ip, std::move(data));
 }
 
 void AdnlGarlicManager::create_secret_id(AdnlNodeIdFull id, td::Promise<td::Unit> promise) {
@@ -93,189 +85,87 @@ void AdnlGarlicManager::create_secret_id(AdnlNodeIdFull id, td::Promise<td::Unit
     return;
   }
   secret_ids_[id_short].id_full = id;
-  auto addr_list = connection_ && connection_->ready ? connection_->addr_list : AdnlAddressList();
-  td::actor::send_closure(adnl_, &Adnl::add_id_ex, std::move(id), std::move(addr_list), adnl_cat_, local_id_mode());
+  td::actor::send_closure(adnl_, &Adnl::add_id_ex, std::move(id), addr_list_, adnl_cat_, local_id_mode());
   if (use_secret_dht() && !secret_dht_node_.empty()) {
     td::actor::send_closure(adnl_, &Adnl::set_custom_dht_node, id_short, secret_dht_node_.get());
   }
   promise.set_result(td::Unit());
 }
 
-void AdnlGarlicManager::init_connection(size_t chain_length, td::Promise<td::Unit> promise) {
-  if (chain_length == 0) {
-    promise.set_error(td::Status::Error("Invalid chain length"));
+void AdnlGarlicManager::alarm() {
+  td::actor::send_closure(
+      overlays_, &overlay::Overlays::get_overlay_random_peers_full, local_id_, overlay_id_, 8,
+      [SelfId = actor_id(this)](td::Result<std::vector<AdnlNodeIdFull>> R) {
+        if (R.is_ok()) {
+          td::actor::send_closure(SelfId, &AdnlGarlicManager::got_servers_from_overlay, R.move_as_ok());
+        } else {
+          LOG(WARNING) << "Failed to get peers: " << R.move_as_error();
+          td::actor::send_closure(SelfId, &AdnlGarlicManager::got_servers_from_overlay, std::vector<AdnlNodeIdFull>());
+        }
+      });
+}
+
+void AdnlGarlicManager::got_servers_from_overlay(std::vector<AdnlNodeIdFull> servers) {
+  for (AdnlNodeIdFull& id_full : servers) {
+    AdnlNodeIdShort id = id_full.compute_short_id();
+    if (servers_.count(id)) {
+      continue;
+    }
+    LOG(DEBUG) << "Adding server " << id;
+    servers_[id].id_full = std::move(id_full);
+  }
+  try_create_connection();
+  alarm_timestamp() = td::Timestamp::in(td::Random::fast(1.0, 2.0));
+}
+
+void AdnlGarlicManager::try_create_connection() {
+  if (!connection_.empty()) {
     return;
   }
-  if (chain_length > servers_vec_.size()) {
-    promise.set_error(td::Status::Error("Not enough servers"));
+  // TODO: move some parameters to config
+  if (servers_.size() < 3) {
+    LOG(DEBUG) << "Too few servers (" << servers_.size() << ")";
     return;
   }
-  for (size_t i = 0; i < chain_length; ++i) {
-    std::swap(servers_vec_[i], servers_vec_[i + td::Random::secure_uint32() % (servers_vec_.size() - i)]);
+  size_t chain_size = 2;
+  std::vector<AdnlNodeIdFull> chain;
+  for (const auto& p : servers_) {
+    chain.push_back(p.second.id_full);
   }
-  std::vector<AdnlNodeIdShort> chain(servers_vec_.begin(), servers_vec_.begin() + chain_length);
-
-  LOG(INFO) << "Creating garlic connection, local_id = " << local_id_;
-  for (size_t i = 0; i < chain.size(); ++i) {
-    LOG(INFO) << "  Node #" << i << " : " << chain[i];
+  for (size_t i = 0; i < chain_size; ++i) {
+    std::swap(chain[i], chain[i + td::Random::secure_uint32() % (chain.size() - i)]);
   }
+  chain.resize(chain_size);
 
-  std::vector<PublicKey> pubkeys;
-  for (size_t i = 0; i < chain.size() + 1; ++i) {
-    auto private_key = ton::PrivateKey{ton::privkeys::Ed25519::random()};
-    pubkeys.push_back(private_key.compute_public_key());
-    td::actor::send_closure(keyring_, &ton::keyring::Keyring::add_key, std::move(private_key), true, [](td::Unit) {});
-  }
-
-  std::vector<std::unique_ptr<Encryptor>> encryptors;
-  for (AdnlNodeIdShort id : chain) {
-    TRY_RESULT_PROMISE(promise, enc, servers_[id].id_full.pubkey().create_encryptor());
-    encryptors.push_back(std::move(enc));
-  }
-
-  std::vector<PublicKeyHash> decrypt_via;
-  for (const auto& pub : pubkeys) {
-    decrypt_via.push_back(pub.compute_short_id());
-  }
-  connection_ = std::make_unique<Connection>();
-  connection_->chain = std::move(chain);
-  connection_->encryptors = std::move(encryptors);
-
-  AdnlCategoryMask cat_mask;
-  cat_mask.set(adnl_cat_);
-
-  class TunnelCallback : public AdnlInboundTunnelEndpoint::Callback {
+  class Callback : public Connection::Callback {
    public:
-    TunnelCallback(td::actor::ActorId<AdnlGarlicManager> id) : id_(id) {
+    Callback(td::actor::ActorId<AdnlGarlicManager> id) : id_(std::move(id)) {
     }
-    void receive_custom_message(size_t sender_id, td::BufferSlice data) override {
-      td::actor::send_closure(id_, &AdnlGarlicManager::receive_custom_message, sender_id, std::move(data));
+    void on_ready(AdnlAddressList addr_list) override {
+      td::actor::send_closure(id_, &AdnlGarlicManager::update_addr_list, std::move(addr_list));
     }
+    void on_fail(AdnlNodeIdShort causer = AdnlNodeIdShort::zero()) override {
+      td::actor::send_closure(id_, &AdnlGarlicManager::on_connection_fail, causer);
+    }
+
    private:
     td::actor::ActorId<AdnlGarlicManager> id_;
   };
-  auto tunnel_callback = std::make_unique<TunnelCallback>(actor_id(this));
-  connection_->endpoint = td::actor::create_actor<AdnlInboundTunnelEndpoint>(
-      "adnltunnelendpoint", std::move(decrypt_via), cat_mask, std::move(tunnel_callback), keyring_, adnl_);
-
-  class AdnlCallback : public Adnl::Callback {
-   public:
-    AdnlCallback(td::actor::ActorId<AdnlInboundTunnelEndpoint> id) : id_(id) {
-    }
-    void receive_message(AdnlNodeIdShort src, AdnlNodeIdShort dst, td::BufferSlice data) override {
-      td::actor::send_closure(id_, &AdnlInboundTunnelEndpoint::receive_packet, src, td::IPAddress(), std::move(data));
-    }
-    void receive_query(AdnlNodeIdShort src, AdnlNodeIdShort dst, td::BufferSlice data,
-                       td::Promise<td::BufferSlice> promise) override {
-    }
-   private:
-    td::actor::ActorId<AdnlInboundTunnelEndpoint> id_;
-  };
-  auto adnl_callback = std::make_unique<AdnlCallback>(connection_->endpoint.get());
-  td::BufferSlice prefix =
-      create_serialize_tl_object<ton_api::adnl_tunnel_packetPrefix>(pubkeys[0].compute_short_id().tl());
-  connection_->guard = AdnlSubscribeGuard(adnl_, local_id_, as_slice(prefix).str(), std::move(adnl_callback));
-  auto addr = td::Ref<AdnlAddressTunnel>(true, connection_->chain.back(), pubkeys.back());
-  connection_->addr_list.set_version(static_cast<td::int32>(td::Clocks::system()));
-  connection_->addr_list.set_reinit_date(adnl::Adnl::adnl_start_time());
-  connection_->addr_list.add_addr(std::move(addr));
-
-  std::vector<tl_object_ptr<ton_api::adnl_garlic_Message>> msgs;
-  for (size_t i = 0; i < connection_->chain.size(); ++i) {
-    msgs.push_back(create_tl_object<ton_api::adnl_garlic_createTunnelMidpoint>(
-        pubkeys[i].tl(), (i == 0 ? local_id_ : connection_->chain[i - 1]).bits256_value(),
-        pubkeys[i + 1].compute_short_id().tl()));
-  }
-  wrap_send_message(*connection_, std::move(msgs));
-
-  connection_->pubkeys = std::move(pubkeys);
-  connection_->ready_promise = std::move(promise);
-  connection_->ready_ttl = td::Timestamp::in(10.0);
-  td::Random::secure_bytes(connection_->init_nonce.as_slice());
-  wrap_send_message(*connection_, create_tl_object<ton_api::adnl_garlic_ping>(
-                                      connection_->pubkeys.back().compute_short_id().tl(), connection_->init_nonce));
-  alarm_timestamp() = connection_->ready_ttl;
+  connection_ = td::actor::create_actor<Connection>("adnlgarlicconn", local_id_, std::move(chain),
+                                                    std::make_unique<Callback>(actor_id(this)), adnl_cat_, adnl_,
+                                                    keyring_);
 }
 
-void AdnlGarlicManager::receive_custom_message(size_t sender_id, td::BufferSlice data) {
-  auto F = fetch_tl_object<ton_api::adnl_garlic_pong>(data, true);
-  if (F.is_error()) {
-    return;
-  }
-  if (connection_ && !connection_->ready && connection_->init_nonce == F.ok()->nonce_) {
-    connection_->ready = true;
-    update_addr_lists();
-    connection_->ready_promise.set_result(td::Unit());
-    alarm_timestamp() = td::Timestamp::in(td::Random::fast(60.0, 120.0));
-  }
-}
-
-void AdnlGarlicManager::alarm() {
-  if (!connection_) {
-    return;
-  }
-  if (!connection_->ready && connection_->ready_ttl.is_in_past()) {
-    connection_->ready_promise.set_error(td::Status::Error(ErrorCode::timeout, "timeout"));
-    connection_ = nullptr;
-    return;
-  }
-  if (connection_->ready) {
-    wrap_send_message(*connection_, create_tl_object<ton_api::adnl_garlic_ping>(
-                                        connection_->pubkeys.back().compute_short_id().tl(), td::Bits256::zero()));
-    alarm_timestamp() = td::Timestamp::in(td::Random::fast(60.0, 120.0));
-  }
-}
-
-void AdnlGarlicManager::update_addr_lists() {
-  auto addr_list = connection_ && connection_->ready ? connection_->addr_list : AdnlAddressList();
+void AdnlGarlicManager::update_addr_list(AdnlAddressList addr_list) {
   for (const auto& p : secret_ids_) {
     td::actor::send_closure(adnl_, &Adnl::add_id_ex, p.second.id_full, addr_list, adnl_cat_, local_id_mode());
   }
+  addr_list_ = std::move(addr_list);
 }
 
-void AdnlGarlicManager::wrap_send_message(const Connection& connection,
-                                          std::vector<tl_object_ptr<ton_api::adnl_garlic_Message>> msgs) {
-  td::BufferSlice message;
-  CHECK(msgs.size() == connection.chain.size());
-  for (int i = (int)connection.chain.size() - 1; i >= 0; --i) {
-    auto obj = std::move(msgs[i]);
-    if (i == (int)connection.chain.size() - 1) {
-      if (!obj) {
-        obj = create_tl_object<ton_api::adnl_garlic_multipleMessages>();
-      }
-    } else {
-      auto R = connection.encryptors[i + 1]->encrypt(message.as_slice());
-      if (R.is_error()) {
-        LOG(DEBUG) << "Failed to encrypt message with pubkey of " << connection.chain[i + 1] << ": "
-                   << R.move_as_error();
-        return;
-      }
-      auto forward =
-          create_tl_object<ton_api::adnl_garlic_forwardToNext>(connection.chain[i + 1].bits256_value(), R.move_as_ok());
-      if (obj) {
-        ton_api::downcast_call(
-            *obj,
-            td::overloaded([&](ton_api::adnl_garlic_multipleMessages& x) { x.messages_.push_back(std::move(forward)); },
-                           [&](auto&) {
-                             std::vector<tl_object_ptr<ton_api::adnl_garlic_Message>> m;
-                             m.push_back(std::move(obj));
-                             m.push_back(std::move(forward));
-                             obj = create_tl_object<ton_api::adnl_garlic_multipleMessages>(std::move(m));
-                           }));
-      } else {
-        obj = std::move(forward);
-      }
-    }
-    message = serialize_tl_object(obj, true);
-  }
-  td::actor::send_closure(adnl_, &Adnl::send_message, local_id_, connection_->chain[0], std::move(message));
-}
-
-void AdnlGarlicManager::wrap_send_message(const Connection& connection,
-                                          tl_object_ptr<ton_api::adnl_garlic_Message> msg) {
-  std::vector<tl_object_ptr<ton_api::adnl_garlic_Message>> msgs(connection.chain.size());
-  msgs.back() = std::move(msg);
-  wrap_send_message(connection, std::move(msgs));
+void AdnlGarlicManager::on_connection_fail(AdnlNodeIdShort causer) {
+  connection_.reset();
+  try_create_connection();
 }
 
 }  // namespace adnl

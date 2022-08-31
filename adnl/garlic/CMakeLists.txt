@@ -9,6 +9,7 @@ set(ADNL_GARLIC_SOURCE
   adnl-garlic-server.cpp
   adnl-tunnel.cpp
   adnl-garlic-manager.cpp
+  adnl-garlic-manager-connection.cpp
   ${ADNL_GARLIC_HEADERS})
 
 add_library(adnl-garlic STATIC ${ADNL_GARLIC_SOURCE})

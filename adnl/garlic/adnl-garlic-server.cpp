@@ -48,10 +48,21 @@ void AdnlGarlicServer::start_up() {
   for (const auto& p : PREFIXES) {
     td::actor::send_closure(adnl_, &Adnl::subscribe, local_id_, p, std::make_unique<Callback>(actor_id(this)));
   }
+
+  auto X = create_hash_tl_object<ton_api::adnl_garlic_publicOverlayId>();
+  td::BufferSlice b{32};
+  b.as_slice().copy_from(as_slice(X));
+  overlay_id_full_ = overlay::OverlayIdFull{std::move(b)};
+  overlay_id_ = overlay_id_full_.compute_short_id();
+  td::actor::send_closure(overlays_, &overlay::Overlays::create_public_overlay, local_id_, overlay_id_full_.clone(),
+                          std::make_unique<overlay::Overlays::EmptyCallback>(), overlay::OverlayPrivacyRules{},
+                          R"({ "type": "garlic" })");
+
   alarm_timestamp() = td::Timestamp::in(60.0);
 }
 
 void AdnlGarlicServer::tear_down() {
+  td::actor::send_closure(overlays_, &overlay::Overlays::delete_overlay, local_id_, overlay_id_);
   for (const auto& p : PREFIXES) {
     td::actor::send_closure(adnl_, &Adnl::unsubscribe, local_id_, p);
   }

@@ -39,8 +39,8 @@ class TestLoopbackNetworkManager : public ton::adnl::AdnlNetworkManager {
   void add_proxy_addr(td::IPAddress addr, td::uint16 local_port, std::shared_ptr<AdnlProxy> proxy,
                       AdnlCategoryMask cat_mask, td::uint32 priority) override {
   }
-  void add_garlic_addr(td::actor::ActorOwn<AdnlGarlicManager> garlic_manager, AdnlCategoryMask cat_mask,
-                       td::uint32 priority) override {
+  void add_custom_sender_addr(td::actor::ActorOwn<CustomSender> sender, AdnlCategoryMask cat_mask,
+                              td::uint32 priority) override {
   }
   void send_udp_packet(ton::adnl::AdnlNodeIdShort src_id, ton::adnl::AdnlNodeIdShort dst_id, td::IPAddress dst_addr,
                        td::uint32 priority, td::BufferSlice data) override {

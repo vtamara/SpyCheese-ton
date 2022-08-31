@@ -21,6 +21,7 @@
 #include "adnl/adnl-peer-table.h"
 #include "keys/encryptor.h"
 #include "adnl/utils.hpp"
+#include "overlay/overlays.h"
 
 namespace ton {
 
@@ -29,11 +30,13 @@ namespace adnl {
 class AdnlGarlicServer : public td::actor::Actor {
  public:
   explicit AdnlGarlicServer(AdnlNodeIdShort local_id, td::actor::ActorId<keyring::Keyring> keyring,
-                            td::actor::ActorId<Adnl> adnl, td::actor::ActorId<AdnlNetworkManager> network_manager)
+                            td::actor::ActorId<Adnl> adnl, td::actor::ActorId<AdnlNetworkManager> network_manager,
+                            td::actor::ActorId<overlay::Overlays> overlays)
       : local_id_(local_id)
       , keyring_(std::move(keyring))
       , adnl_(std::move(adnl))
-      , network_manager_(std::move(network_manager)) {
+      , network_manager_(std::move(network_manager))
+      , overlays_(std::move(overlays)) {
   }
 
   void start_up() override;
@@ -45,6 +48,10 @@ class AdnlGarlicServer : public td::actor::Actor {
   td::actor::ActorId<keyring::Keyring> keyring_;
   td::actor::ActorId<Adnl> adnl_;
   td::actor::ActorId<AdnlNetworkManager> network_manager_;
+  td::actor::ActorId<overlay::Overlays> overlays_;
+
+  overlay::OverlayIdFull overlay_id_full_;
+  overlay::OverlayIdShort overlay_id_;
 
   struct TunnelMidpoint {
     td::actor::ActorOwn<AdnlInboundTunnelMidpoint> actor;

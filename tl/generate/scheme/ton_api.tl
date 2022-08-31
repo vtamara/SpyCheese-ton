@@ -153,6 +153,8 @@ adnl.garlic.encryptedMessage data:bytes = adnl.garlic.Message;
 
 adnl.garlic.pong nonce:int256 = adnl.garlic.QueryAnswer;
 
+adnl.garlic.publicOverlayId = adnl.garlic.PublicOverlayId;
+
 ---functions---
 
 ---types---
