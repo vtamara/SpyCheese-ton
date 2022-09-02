@@ -41,6 +41,7 @@ class AdnlAddressImpl : public td::CntObject {
       std::unique_ptr<AdnlNetworkConnection::Callback> callback) const = 0;
 
   static td::Ref<AdnlAddressImpl> create(const tl_object_ptr<ton_api::adnl_Address> &addr);
+  static td::Ref<AdnlAddressImpl> create(td::IPAddress ip);
 };
 
 using AdnlAddress = td::Ref<AdnlAddressImpl>;

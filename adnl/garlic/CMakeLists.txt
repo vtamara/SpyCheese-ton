@@ -14,8 +14,10 @@ set(ADNL_GARLIC_SOURCE
 
 add_library(adnl-garlic STATIC ${ADNL_GARLIC_SOURCE})
 target_include_directories(adnl-garlic PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/..
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/../..
 )
 target_link_libraries(adnl-garlic PUBLIC adnl overlay)
+
+add_executable(garlic-server-app garlic-server-app.cpp)
+target_include_directories(garlic-server-app PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>/../..)
+target_link_libraries(garlic-server-app PUBLIC adnl-garlic git)

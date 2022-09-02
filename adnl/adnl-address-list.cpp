@@ -186,6 +186,18 @@ td::Ref<AdnlAddressImpl> AdnlAddressImpl::create(const tl_object_ptr<ton_api::ad
   return res;
 }
 
+td::Ref<AdnlAddressImpl> AdnlAddressImpl::create(td::IPAddress ip) {
+  if (ip.is_ipv4()) {
+    return td::make_ref<AdnlAddressUdp>(ip.get_ipv4(), (td::uint16)ip.get_port());
+  } else if (ip.is_ipv6()) {
+    auto s = ip.get_ipv6();
+    CHECK(s.size() == 16);
+    return td::make_ref<AdnlAddressUdp6>(td::Bits128((const unsigned char*)s.data()), (td::uint16)ip.get_port());
+  } else {
+    return td::make_ref<AdnlAddressUdp>(0, 0);
+  }
+}
+
 bool AdnlAddressList::public_only() const {
   for (auto &addr : addrs_) {
     if (!addr->is_public()) {
