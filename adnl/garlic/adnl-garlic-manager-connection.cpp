@@ -209,6 +209,7 @@ void AdnlGarlicManager::Connection::set_ready() {
   td::Ref<AdnlAddressTunnel> addr(true, chain_.back(), pubkeys_.back());
   AdnlAddressList addr_list;
   addr_list.set_version(static_cast<td::int32>(td::Clocks::system()));
+  // TODO:: Use other value than adnl_start_time (node can be identified by reinit date)
   addr_list.set_reinit_date(adnl::Adnl::adnl_start_time());
   addr_list.add_addr(std::move(addr));
   callback_->on_ready(std::move(addr_list));

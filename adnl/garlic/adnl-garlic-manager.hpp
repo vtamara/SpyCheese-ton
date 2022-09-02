@@ -28,11 +28,18 @@ namespace ton {
 
 namespace adnl {
 
+struct AdnlGarlicConfig {
+  size_t chain_length = 3;
+  double start_delay = 5.0;
+  bool use_secret_dht = false;
+  std::shared_ptr<dht::DhtGlobalConfig> dht_config;
+};
+
 class AdnlGarlicManager : public AdnlNetworkManager::CustomSender {
  public:
   AdnlGarlicManager(AdnlNodeIdShort local_id, td::uint8 adnl_cat, td::actor::ActorId<Adnl> adnl,
                     td::actor::ActorId<keyring::Keyring> keyring, td::actor::ActorId<overlay::Overlays> overlays,
-                    std::shared_ptr<dht::DhtGlobalConfig> dht_config);
+                    AdnlGarlicConfig config);
 
   void start_up() override;
   void tear_down() override;
@@ -47,7 +54,9 @@ class AdnlGarlicManager : public AdnlNetworkManager::CustomSender {
   td::actor::ActorId<Adnl> adnl_;
   td::actor::ActorId<keyring::Keyring> keyring_;
   td::actor::ActorId<overlay::Overlays> overlays_;
-  std::shared_ptr<dht::DhtGlobalConfig> dht_config_;
+  AdnlGarlicConfig config_;
+
+  td::Timestamp create_connection_at_;
 
   overlay::OverlayIdFull overlay_id_full_;
   overlay::OverlayIdShort overlay_id_;
@@ -110,12 +119,9 @@ class AdnlGarlicManager : public AdnlNetworkManager::CustomSender {
   std::map<AdnlNodeIdShort, SecretId> secret_ids_;
   td::actor::ActorOwn<dht::Dht> secret_dht_node_;
 
-  bool use_secret_dht() const {
-    return dht_config_ != nullptr;
-  }
   td::uint32 local_id_mode() const {
     return (td::uint32)AdnlLocalIdMode::send_ignore_remote_addr |
-           (use_secret_dht() ? (td::uint32)AdnlLocalIdMode::custom_dht_node : 0);
+           (config_.use_secret_dht ? (td::uint32)AdnlLocalIdMode::custom_dht_node : 0);
   }
 
   void got_servers_from_overlay(std::vector<AdnlNodeIdFull> servers);

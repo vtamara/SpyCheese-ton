@@ -27,24 +27,27 @@ AdnlGarlicManager::AdnlGarlicManager(AdnlNodeIdShort local_id, td::uint8 adnl_ca
                                      td::actor::ActorId<Adnl> adnl,
                                      td::actor::ActorId<keyring::Keyring> keyring,
                                      td::actor::ActorId<overlay::Overlays> overlays,
-                                     std::shared_ptr<dht::DhtGlobalConfig> dht_config)
+                                     AdnlGarlicConfig config)
     : local_id_(local_id)
     , adnl_cat_(adnl_cat)
     , adnl_(std::move(adnl))
     , keyring_(std::move(keyring))
     , overlays_(std::move(overlays))
-    , dht_config_(std::move(dht_config)) {
+    , config_(std::move(config)) {
 }
 
 void AdnlGarlicManager::start_up() {
+  create_connection_at_ = td::Timestamp::in(config_.start_delay);
+
   // Creating DHT node
-  if (use_secret_dht()) {
+  if (config_.use_secret_dht) {
+    CHECK(config_.dht_config != nullptr);
     PrivateKey pk(privkeys::Ed25519::random());
     PublicKey pub = pk.compute_public_key();
     td::actor::send_closure(keyring_, &keyring::Keyring::add_key, pk, true, [](td::Unit) {});
     AdnlNodeIdFull dht_id(pub);
     create_secret_id(dht_id, [](td::Result<td::Unit>) {});
-    auto R = dht::Dht::create_client(dht_id.compute_short_id(), "", dht_config_, keyring_, adnl_);
+    auto R = dht::Dht::create_client(dht_id.compute_short_id(), "", config_.dht_config, keyring_, adnl_);
     if (R.is_error()) {
       LOG(ERROR) << "Failed to create secret DHT node: " << R.move_as_error();
       return;
@@ -86,7 +89,7 @@ void AdnlGarlicManager::create_secret_id(AdnlNodeIdFull id, td::Promise<td::Unit
   }
   secret_ids_[id_short].id_full = id;
   td::actor::send_closure(adnl_, &Adnl::add_id_ex, std::move(id), addr_list_, adnl_cat_, local_id_mode());
-  if (use_secret_dht() && !secret_dht_node_.empty()) {
+  if (config_.use_secret_dht && !secret_dht_node_.empty()) {
     td::actor::send_closure(adnl_, &Adnl::set_custom_dht_node, id_short, secret_dht_node_.get());
   }
   promise.set_result(td::Unit());
@@ -119,15 +122,14 @@ void AdnlGarlicManager::got_servers_from_overlay(std::vector<AdnlNodeIdFull> ser
 }
 
 void AdnlGarlicManager::try_create_connection() {
-  if (!connection_.empty()) {
+  if (!connection_.empty() || !create_connection_at_.is_in_past()) {
     return;
   }
-  // TODO: move some parameters to config
-  if (servers_.size() < 3) {
+  size_t chain_size = config_.chain_length;
+  if (servers_.size() < chain_size) {
     LOG(DEBUG) << "Too few servers (" << servers_.size() << ")";
     return;
   }
-  size_t chain_size = 2;
   std::vector<AdnlNodeIdFull> chain;
   for (const auto& p : servers_) {
     chain.push_back(p.second.id_full);
