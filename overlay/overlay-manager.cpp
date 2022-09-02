@@ -52,6 +52,9 @@ void OverlayManager::register_overlay(adnl::AdnlNodeIdShort local_id, OverlayIdS
   }
   overlays_[local_id][overlay_id] = std::move(overlay);
 
+  if (db_root_.empty()) {
+    return;
+  }
   auto P = td::PromiseCreator::lambda([id = overlays_[local_id][overlay_id].get()](td::Result<DbType::GetResult> R) {
     R.ensure();
     auto value = R.move_as_ok();
@@ -287,13 +290,18 @@ OverlayManager::OverlayManager(std::string db_root, td::actor::ActorId<keyring::
 }
 
 void OverlayManager::start_up() {
-  std::shared_ptr<td::KeyValue> kv =
-      std::make_shared<td::RocksDb>(td::RocksDb::open(PSTRING() << db_root_ << "/overlays").move_as_ok());
-  db_ = DbType{std::move(kv)};
+  if (!db_root_.empty()) {
+    std::shared_ptr<td::KeyValue> kv =
+        std::make_shared<td::RocksDb>(td::RocksDb::open(PSTRING() << db_root_ << "/overlays").move_as_ok());
+    db_ = DbType{std::move(kv)};
+  }
 }
 
 void OverlayManager::save_to_db(adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay_id,
                                 std::vector<OverlayNode> nodes) {
+  if (db_root_.empty()) {
+    return;
+  }
   std::vector<tl_object_ptr<ton_api::overlay_node>> nodes_vec;
   for (auto &n : nodes) {
     nodes_vec.push_back(n.tl());
