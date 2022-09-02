@@ -1822,8 +1822,12 @@ void ValidatorEngine::started_full_node() {
 }
 
 void ValidatorEngine::add_lite_server(ton::PublicKeyHash id, td::uint16 port) {
-  td::actor::send_closure(adnl_, &ton::adnl::Adnl::add_id, ton::adnl::AdnlNodeIdFull{keys_[id]},
-                          ton::adnl::AdnlAddressList{}, static_cast<td::uint8>(255));
+  if (config_.adnl_ids.count(id)) {
+    td::actor::send_closure(rldp_, &ton::rldp::Rldp::add_id, ton::adnl::AdnlNodeIdShort{id});
+  } else {
+    td::actor::send_closure(adnl_, &ton::adnl::Adnl::add_id, ton::adnl::AdnlNodeIdFull{keys_[id]},
+                            ton::adnl::AdnlAddressList{}, static_cast<td::uint8>(255));
+  }
   td::actor::send_closure(validator_manager_, &ton::validator::ValidatorManagerInterface::add_ext_server_id,
                           ton::adnl::AdnlNodeIdShort{id});
   td::actor::send_closure(validator_manager_, &ton::validator::ValidatorManagerInterface::add_ext_server_port, port);
