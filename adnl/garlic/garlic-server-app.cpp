@@ -132,6 +132,7 @@ class GarlicServerRunner : public td::actor::Actor {
     auto D = dht::Dht::create_client(dht_id_, "", dht_config_, keyring_.get(), adnl_.get());
     D.ensure();
     dht_ = D.move_as_ok();
+    td::actor::send_closure(adnl_, &adnl::Adnl::register_dht_node, dht_.get());
 
     overlays_ = overlay::Overlays::create(db_root_, keyring_.get(), adnl_.get());
 
