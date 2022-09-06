@@ -33,7 +33,6 @@
 #include "td/utils/FileLog.h"
 #include "td/utils/Random.h"
 #include "td/utils/filesystem.h"
-#include "td/utils/overloaded.h"
 
 #include "auto/tl/ton_api_json.h"
 #include "auto/tl/tonlib_api.hpp"
@@ -41,8 +40,6 @@
 #include "td/actor/MultiPromise.h"
 
 #include "common/errorcode.h"
-
-#include "tonlib/tonlib/TonlibClient.h"
 
 #include "adnl/adnl.h"
 #include "rldp/rldp.h"
@@ -57,10 +54,13 @@
 
 #include "TonlibClient.h"
 #include "DNSResolver.h"
+#include "adnl/garlic/adnl-garlic-manager.hpp"
 
 #if TD_DARWIN || TD_LINUX
 #include <unistd.h>
 #endif
+
+const td::uint8 GARLIC_CAT = 100;
 
 class RldpHttpProxy;
 
@@ -461,15 +461,14 @@ class TcpToRldpRequestSender : public td::actor::Actor {
       ton::adnl::AdnlNodeIdShort local_id, std::string host, std::unique_ptr<ton::http::HttpRequest> request,
       std::shared_ptr<ton::http::HttpPayload> request_payload,
       td::Promise<std::pair<std::unique_ptr<ton::http::HttpResponse>, std::shared_ptr<ton::http::HttpPayload>>> promise,
-      td::actor::ActorId<ton::adnl::Adnl> adnl, td::actor::ActorId<ton::dht::Dht> dht,
-      td::actor::ActorId<ton::rldp::Rldp> rldp, td::actor::ActorId<DNSResolver> dns_resolver)
+      td::actor::ActorId<ton::adnl::Adnl> adnl, td::actor::ActorId<ton::rldp::Rldp> rldp,
+      td::actor::ActorId<DNSResolver> dns_resolver)
       : local_id_(local_id)
       , host_(std::move(host))
       , request_(std::move(request))
       , request_payload_(std::move(request_payload))
       , promise_(std::move(promise))
       , adnl_(adnl)
-      , dht_(dht)
       , rldp_(rldp)
       , dns_resolver_(dns_resolver) {
   }
@@ -577,7 +576,6 @@ class TcpToRldpRequestSender : public td::actor::Actor {
   td::Promise<std::pair<std::unique_ptr<ton::http::HttpResponse>, std::shared_ptr<ton::http::HttpPayload>>> promise_;
 
   td::actor::ActorId<ton::adnl::Adnl> adnl_;
-  td::actor::ActorId<ton::dht::Dht> dht_;
   td::actor::ActorId<ton::rldp::Rldp> rldp_;
   td::actor::ActorId<DNSResolver> dns_resolver_;
 
@@ -861,12 +859,12 @@ class RldpHttpProxy : public td::actor::Actor {
  public:
   RldpHttpProxy() = default;
 
-  void set_port(td::uint16 port) {
-    if (port_) {
+  void set_http_port(td::uint16 port) {
+    if (http_port_) {
       LOG(ERROR) << "duplicate listening port";
       std::_Exit(2);
     }
-    port_ = port;
+    http_port_ = port;
   }
 
   void set_global_config(std::string path) {
@@ -874,16 +872,47 @@ class RldpHttpProxy : public td::actor::Actor {
   }
 
   void set_addr(td::IPAddress addr) {
+    if (addr_.is_valid()) {
+      LOG(ERROR) << "duplicate ip address or port";
+      std::_Exit(2);
+    }
     addr_ = addr;
+    have_ip_addr_ = true;
   }
 
   void set_client_port(td::uint16 port) {
-    is_client_ = true;
-    client_port_ = port;
+    if (addr_.is_valid()) {
+      LOG(ERROR) << "duplicate ip address or port";
+      std::_Exit(2);
+    }
+    addr_.init_host_port("127.0.0.1", port).ensure();
+  }
+
+  void set_garlic_port(td::uint16 port) {
+    if (addr_.is_valid()) {
+      LOG(ERROR) << "duplicate ip address or port";
+      std::_Exit(2);
+    }
+    addr_.init_host_port("127.0.0.1", port).ensure();
+    use_garlic_ = true;
   }
 
   void set_local_host(std::string host, td::uint16 port, td::IPAddress remote) {
     hosts_[host].ports_[port].remote_addr_ = remote;
+    is_client_ = false;
+  }
+
+  void add_adnl_addr(ton::adnl::AdnlNodeIdShort id) {
+    server_ids_.insert(id);
+    is_client_ = false;
+  }
+
+  void set_db_root(std::string db_root) {
+    db_root_ = std::move(db_root);
+  }
+
+  void set_proxy_all(bool value) {
+    proxy_all_ = value;
   }
 
   td::Status load_global_config() {
@@ -903,38 +932,7 @@ class RldpHttpProxy : public td::actor::Actor {
     return td::Status::OK();
   }
 
-  void store_dht() {
-    for (auto &serv : hosts_) {
-      if (serv.first != "*") {
-        for (auto &serv_id : server_ids_) {
-          ton::PublicKey key = ton::pubkeys::Unenc{"http." + serv.first};
-          ton::dht::DhtKey dht_key{key.compute_short_id(), "http." + serv.first, 0};
-          auto dht_update_rule = ton::dht::DhtUpdateRuleAnybody::create().move_as_ok();
-          ton::dht::DhtKeyDescription dht_key_description{std::move(dht_key), key, std::move(dht_update_rule),
-                                                          td::BufferSlice()};
-          dht_key_description.check().ensure();
-
-          auto ttl = static_cast<td::uint32>(td::Clocks::system() + 3600);
-          ton::dht::DhtValue dht_value{std::move(dht_key_description), td::BufferSlice{serv_id.as_slice()}, ttl,
-                                       td::BufferSlice("")};
-
-          td::actor::send_closure(dht_, &ton::dht::Dht::set_value, std::move(dht_value), [](td::Unit) {});
-        }
-      }
-    }
-    alarm_timestamp() = td::Timestamp::in(60.0);
-  }
-
-  void alarm() override {
-    store_dht();
-  }
-
-  void got_full_id(ton::adnl::AdnlNodeIdShort short_id, ton::adnl::AdnlNodeIdFull full_id) {
-    server_ids_full_[short_id] = full_id;
-  }
-
   void run() {
-    keyring_ = ton::keyring::Keyring::create(is_client_ ? std::string("") : (db_root_ + "/keyring"));
     {
       auto S = load_global_config();
       if (S.is_error()) {
@@ -942,112 +940,101 @@ class RldpHttpProxy : public td::actor::Actor {
         std::_Exit(2);
       }
     }
-    if (is_client_ && server_ids_.size() > 0) {
-      LOG(ERROR) << "client-only node cannot be server";
+    if (!addr_.is_valid()) {
+      LOG(ERROR) << "no ip address or port is set";
       std::_Exit(2);
     }
-    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this)](td::Result<td::Unit> R) {
-      R.ensure();
-      td::actor::send_closure(SelfId, &RldpHttpProxy::run_cont);
+    keyring_ = ton::keyring::Keyring::create(is_client_ ? std::string("") : (db_root_ + "/keyring"));
+    std::vector<ton::adnl::AdnlNodeIdShort> adnl_ids(server_ids_.begin(), server_ids_.end());
+    local_id_ = generate_adnl_id().compute_short_id();
+    adnl_ids.push_back(local_id_);
+    init_adnl(std::move(adnl_ids), [SelfId = actor_id(this)](td::Result<td::Unit> R) {
+      if (R.is_error()) {
+        LOG(ERROR) << R.move_as_error();
+        std::_Exit(2);
+      } else {
+        td::actor::send_closure(SelfId, &RldpHttpProxy::run_cont);
+      }
     });
-    td::MultiPromise mp;
-    auto ig = mp.init_guard();
-    ig.add_promise(std::move(P));
-    for (auto &x : server_ids_) {
-      auto Q = td::PromiseCreator::lambda([promise = ig.get_promise(), SelfId = actor_id(this),
-                                           x](td::Result<ton::PublicKey> R) mutable {
-        if (R.is_error()) {
-          promise.set_error(R.move_as_error());
-        } else {
-          td::actor::send_closure(SelfId, &RldpHttpProxy::got_full_id, x, ton::adnl::AdnlNodeIdFull{R.move_as_ok()});
-          promise.set_value(td::Unit());
-        }
-      });
-      td::actor::send_closure(keyring_, &ton::keyring::Keyring::get_public_key, x.pubkey_hash(), std::move(Q));
-    }
-
-    auto conf_dataR = td::read_file(global_config_);
-    conf_dataR.ensure();
-
-    auto tonlib_options = tonlib_api::make_object<tonlib_api::options>(
-        tonlib_api::make_object<tonlib_api::config>(conf_dataR.move_as_ok().as_slice().str(), "", false, false),
-        tonlib_api::make_object<tonlib_api::keyStoreTypeInMemory>());
-    tonlib_client_ = td::actor::create_actor<TonlibClient>("tonlibclient", std::move(tonlib_options));
-    dns_resolver_ = td::actor::create_actor<DNSResolver>("dnsresolver", tonlib_client_.get());
   }
 
-  void run_cont() {
-    if (is_client_ && hosts_.size() > 0) {
-      LOG(ERROR) << "client-only node cannot be server";
-      std::_Exit(2);
-    }
-    if (is_client_ && client_port_ == 0) {
-      LOG(ERROR) << "client-only expects client port";
-      std::_Exit(2);
-    }
-    {
-      adnl_network_manager_ =
-          ton::adnl::AdnlNetworkManager::create(is_client_ ? client_port_ : static_cast<td::uint16>(addr_.get_port()));
-      adnl_ = ton::adnl::Adnl::create(is_client_ ? std::string("") : (db_root_), keyring_.get());
-      td::actor::send_closure(adnl_, &ton::adnl::Adnl::register_network_manager, adnl_network_manager_.get());
-      ton::adnl::AdnlCategoryMask cat_mask;
-      cat_mask[0] = true;
-      if (is_client_) {
-        td::IPAddress addr;
-        addr.init_host_port("127.0.0.1", client_port_).ensure();
-        td::actor::send_closure(adnl_network_manager_, &ton::adnl::AdnlNetworkManager::add_self_addr, addr,
-                                std::move(cat_mask), 0);
-      } else {
-        td::actor::send_closure(adnl_network_manager_, &ton::adnl::AdnlNetworkManager::add_self_addr, addr_,
-                                std::move(cat_mask), 0);
-      }
+  ton::adnl::AdnlNodeIdFull generate_adnl_id() {
+    auto pk = ton::PrivateKey{ton::privkeys::Ed25519::random()};
+    auto pub = pk.compute_public_key();
+    td::actor::send_closure(keyring_, &ton::keyring::Keyring::add_key, std::move(pk), true, [](td::Unit) {});
+    return ton::adnl::AdnlNodeIdFull{pub};
+  }
 
-      ton::adnl::AdnlAddressList addr_list;
-      if (!is_client_) {
-        ton::adnl::AdnlAddress x = ton::adnl::AdnlAddressImpl::create(
-            ton::create_tl_object<ton::ton_api::adnl_address_udp>(addr_.get_ipv4(), addr_.get_port()));
-        addr_list.add_addr(std::move(x));
-      }
-      addr_list.set_version(static_cast<td::int32>(td::Clocks::system()));
-      addr_list.set_reinit_date(ton::adnl::Adnl::adnl_start_time());
-      {
-        auto pk = ton::PrivateKey{ton::privkeys::Ed25519::random()};
-        auto pub = pk.compute_public_key();
-        td::actor::send_closure(keyring_, &ton::keyring::Keyring::add_key, std::move(pk), true, [](td::Unit) {});
-        local_id_ = ton::adnl::AdnlNodeIdShort{pub.compute_short_id()};
-        td::actor::send_closure(adnl_, &ton::adnl::Adnl::add_id, ton::adnl::AdnlNodeIdFull{pub}, addr_list,
-                                static_cast<td::uint8>(0));
+  void init_adnl(std::vector<ton::adnl::AdnlNodeIdShort> adnl_ids, td::Promise<td::Unit> promise) {
+    td::MultiPromise mp;
+    auto ig = mp.init_guard();
+    ig.add_promise(std::move(promise));
 
-        if (server_ids_.size() == 0 && !is_client_) {
-          server_ids_.insert(local_id_);
-        }
-      }
-      {
-        auto pk = ton::PrivateKey{ton::privkeys::Ed25519::random()};
-        auto pub = pk.compute_public_key();
-        td::actor::send_closure(keyring_, &ton::keyring::Keyring::add_key, std::move(pk), true, [](td::Unit) {});
-        dht_id_ = ton::adnl::AdnlNodeIdShort{pub.compute_short_id()};
-        td::actor::send_closure(adnl_, &ton::adnl::Adnl::add_id, ton::adnl::AdnlNodeIdFull{pub}, addr_list,
-                                static_cast<td::uint8>(0));
-      }
-      for (auto &serv_id : server_ids_) {
-        td::actor::send_closure(adnl_, &ton::adnl::Adnl::add_id, server_ids_full_[serv_id], addr_list,
-                                static_cast<td::uint8>(0));
-      }
+    adnl_network_manager_ = ton::adnl::AdnlNetworkManager::create(static_cast<td::uint16>(addr_.get_port()));
+    adnl_ = ton::adnl::Adnl::create(is_client_ ? std::string("") : db_root_, keyring_.get());
+    td::actor::send_closure(adnl_, &ton::adnl::Adnl::register_network_manager, adnl_network_manager_.get());
+    ton::adnl::AdnlCategoryMask cat_mask;
+    cat_mask[0] = true;
+    td::actor::send_closure(adnl_network_manager_, &ton::adnl::AdnlNetworkManager::add_self_addr, addr_,
+                            std::move(cat_mask), 0);
+    ton::adnl::AdnlAddressList addr_list;
+    if (have_ip_addr_) {
+      addr_list.add_addr(ton::adnl::AdnlAddressImpl::create(addr_));
     }
+    addr_list.set_version(static_cast<td::int32>(td::Clocks::system()));
+    addr_list.set_reinit_date(ton::adnl::Adnl::adnl_start_time());
     {
-      if (is_client_) {
-        auto D = ton::dht::Dht::create_client(dht_id_, "", dht_config_, keyring_.get(), adnl_.get());
+      auto dht_id = generate_adnl_id();
+      td::actor::send_closure(adnl_, &ton::adnl::Adnl::add_id, dht_id, addr_list, (td::uint8)0);
+      if (is_client_ || !have_ip_addr_) {
+        auto D = ton::dht::Dht::create_client(dht_id.compute_short_id(), "", dht_config_, keyring_.get(), adnl_.get());
         D.ensure();
         dht_ = D.move_as_ok();
       } else {
-        auto D = ton::dht::Dht::create(dht_id_, db_root_, dht_config_, keyring_.get(), adnl_.get());
+        auto D = ton::dht::Dht::create(dht_id.compute_short_id(), db_root_, dht_config_, keyring_.get(), adnl_.get());
         D.ensure();
         dht_ = D.move_as_ok();
       }
       td::actor::send_closure(adnl_, &ton::adnl::Adnl::register_dht_node, dht_.get());
     }
-    if (port_) {
+    if (use_garlic_) {
+      overlays_ = ton::overlay::Overlays::create(is_client_ ? "" : db_root_, keyring_.get(), adnl_.get());
+      ton::adnl::AdnlNodeIdFull public_id = generate_adnl_id();
+      td::actor::send_closure(adnl_, &ton::adnl::Adnl::add_id, public_id, addr_list, (td::uint8)0);
+      ton::adnl::AdnlGarlicConfig config;
+      config.dht_config = dht_config_;
+      auto manager = td::actor::create_actor<ton::adnl::AdnlGarlicManager>(
+          "garlicmanager", public_id.compute_short_id(), GARLIC_CAT, adnl_.get(), keyring_.get(), overlays_.get(),
+          config);
+      adnl_garlic_manager_ = manager.get();
+      ton::adnl::AdnlCategoryMask mask;
+      mask.set(GARLIC_CAT);
+      td::actor::send_closure(adnl_network_manager_, &ton::adnl::AdnlNetworkManager::add_custom_sender_addr,
+                              std::move(manager), mask, 0);
+    }
+    for (ton::adnl::AdnlNodeIdShort id : adnl_ids) {
+      if (use_garlic_) {
+        td::actor::send_closure(adnl_garlic_manager_, &ton::adnl::AdnlGarlicManager::create_secret_id_short, id,
+                                ig.get_promise());
+      } else {
+        td::actor::send_closure(keyring_, &ton::keyring::Keyring::get_public_key, id.pubkey_hash(),
+                                [promise = ig.get_promise(), SelfId = actor_id(this), addr_list,
+                                 adnl = adnl_.get()](td::Result<ton::PublicKey> R) mutable {
+                                  if (R.is_error()) {
+                                    promise.set_error(R.move_as_error());
+                                  } else {
+                                    ton::adnl::AdnlNodeIdFull id_full{R.move_as_ok()};
+                                    td::actor::send_closure(adnl, &ton::adnl::Adnl::add_id, id_full,
+                                                            std::move(addr_list), (td::uint8)0);
+                                    promise.set_value(td::Unit());
+                                  }
+                                });
+      }
+    }
+  }
+
+  void run_cont() {
+    if (http_port_) {
       class Cb : public ton::http::HttpServer::Callback {
        public:
         Cb(td::actor::ActorId<RldpHttpProxy> proxy) : proxy_(proxy) {
@@ -1064,7 +1051,7 @@ class RldpHttpProxy : public td::actor::Actor {
         td::actor::ActorId<RldpHttpProxy> proxy_;
       };
 
-      server_ = ton::http::HttpServer::create(port_, std::make_shared<Cb>(actor_id(this)));
+      server_ = ton::http::HttpServer::create(http_port_, std::make_shared<Cb>(actor_id(this)));
     }
 
     for (auto &serv_id : server_ids_) {
@@ -1095,7 +1082,21 @@ class RldpHttpProxy : public td::actor::Actor {
       td::actor::send_closure(rldp_, &ton::rldp::Rldp::add_id, serv_id);
     }
 
-    store_dht();
+    if (!http_port_) {
+      return;
+    }
+    auto conf_dataR = td::read_file(global_config_);
+    conf_dataR.ensure();
+    auto tonlib_options = tonlib_api::make_object<tonlib_api::options>(
+        tonlib_api::make_object<tonlib_api::config>(conf_dataR.move_as_ok().as_slice().str(), "", false, false),
+        tonlib_api::make_object<tonlib_api::keyStoreTypeInMemory>());
+    if (use_garlic_) {
+      tonlib_client_ =
+          td::actor::create_actor<TonlibClient>("tonlibclient", std::move(tonlib_options), rldp_.get(), local_id_);
+    } else {
+      tonlib_client_ = td::actor::create_actor<TonlibClient>("tonlibclient", std::move(tonlib_options));
+    }
+    dns_resolver_ = td::actor::create_actor<DNSResolver>("dnsresolver", tonlib_client_.get());
   }
 
   void receive_http_request(
@@ -1139,8 +1140,8 @@ class RldpHttpProxy : public td::actor::Actor {
     }
 
     td::actor::create_actor<TcpToRldpRequestSender>("outboundreq", local_id_, host, std::move(request),
-                                                    std::move(payload), std::move(promise), adnl_.get(), dht_.get(),
-                                                    rldp_.get(), dns_resolver_.get())
+                                                    std::move(payload), std::move(promise), adnl_.get(), rldp_.get(),
+                                                    dns_resolver_.get())
         .release();
   }
 
@@ -1254,18 +1255,6 @@ class RldpHttpProxy : public td::actor::Actor {
         false));
   }
 
-  void add_adnl_addr(ton::adnl::AdnlNodeIdShort id) {
-    server_ids_.insert(id);
-  }
-
-  void set_db_root(std::string db_root) {
-    db_root_ = std::move(db_root);
-  }
-
-  void set_proxy_all(bool value) {
-    proxy_all_ = value;
-  }
-
  private:
   struct Host {
     struct Server {
@@ -1275,17 +1264,15 @@ class RldpHttpProxy : public td::actor::Actor {
     std::map<td::uint16, Server> ports_;
   };
 
-  td::uint16 port_{0};
+  td::uint16 http_port_{0};
   td::IPAddress addr_;
+  bool have_ip_addr_{false};
+  bool use_garlic_{false};
   std::string global_config_;
 
-  bool is_client_{false};
-  td::uint16 client_port_{0};
-
+  bool is_client_{true};
   std::set<ton::adnl::AdnlNodeIdShort> server_ids_;
-  std::map<ton::adnl::AdnlNodeIdShort, ton::adnl::AdnlNodeIdFull> server_ids_full_;
   ton::adnl::AdnlNodeIdShort local_id_;
-  ton::adnl::AdnlNodeIdShort dht_id_;
 
   td::actor::ActorOwn<ton::http::HttpServer> server_;
   std::map<std::string, Host> hosts_;
@@ -1293,8 +1280,10 @@ class RldpHttpProxy : public td::actor::Actor {
   td::actor::ActorOwn<ton::keyring::Keyring> keyring_;
   td::actor::ActorOwn<ton::adnl::AdnlNetworkManager> adnl_network_manager_;
   td::actor::ActorOwn<ton::adnl::Adnl> adnl_;
+  td::actor::ActorId<ton::adnl::AdnlGarlicManager> adnl_garlic_manager_;
   td::actor::ActorOwn<ton::dht::Dht> dht_;
   td::actor::ActorOwn<ton::rldp::Rldp> rldp_;
+  td::actor::ActorOwn<ton::overlay::Overlays> overlays_;
 
   std::shared_ptr<ton::dht::DhtGlobalConfig> dht_config_;
 
@@ -1401,7 +1390,12 @@ int main(int argc, char *argv[]) {
   });
   p.add_checked_option('p', "port", "sets http listening port", [&](td::Slice arg) -> td::Status {
     TRY_RESULT(port, td::to_integer_safe<td::uint16>(arg));
-    td::actor::send_closure(x, &RldpHttpProxy::set_port, port);
+    td::actor::send_closure(x, &RldpHttpProxy::set_http_port, port);
+    return td::Status::OK();
+  });
+  p.add_checked_option('A', "adnl", "server ADNL addr", [&](td::Slice arg) -> td::Status {
+    TRY_RESULT(adnl, ton::adnl::AdnlNodeIdShort::parse(arg));
+    td::actor::send_closure(x, &RldpHttpProxy::add_adnl_addr, adnl);
     return td::Status::OK();
   });
   p.add_checked_option('a', "address", "local <ip>:<port> to use for adnl queries", [&](td::Slice arg) -> td::Status {
@@ -1410,25 +1404,23 @@ int main(int argc, char *argv[]) {
     td::actor::send_closure(x, &RldpHttpProxy::set_addr, addr);
     return td::Status::OK();
   });
-  p.add_checked_option('A', "adnl", "server ADNL addr", [&](td::Slice arg) -> td::Status {
-    TRY_RESULT(adnl, ton::adnl::AdnlNodeIdShort::parse(arg));
-    td::actor::send_closure(x, &RldpHttpProxy::add_adnl_addr, adnl);
+  p.add_checked_option('c', "client-port", "local <port> to use for adnl queries", [&](td::Slice arg) -> td::Status {
+    TRY_RESULT(port, td::to_integer_safe<td::uint16>(arg));
+    td::actor::send_closure(x, &RldpHttpProxy::set_client_port, port);
     return td::Status::OK();
   });
-  p.add_checked_option('c', "client-port", "local <port> to use for client adnl queries",
+  p.add_checked_option('G', "garlic", "connect to adnl using garlic; local <port> for public adnl address",
                        [&](td::Slice arg) -> td::Status {
                          TRY_RESULT(port, td::to_integer_safe<td::uint16>(arg));
-                         td::actor::send_closure(x, &RldpHttpProxy::set_client_port, port);
+                         td::actor::send_closure(x, &RldpHttpProxy::set_garlic_port, port);
                          return td::Status::OK();
                        });
   p.add_option('C', "global-config", "global TON configuration file",
                [&](td::Slice arg) { td::actor::send_closure(x, &RldpHttpProxy::set_global_config, arg.str()); });
   p.add_checked_option('L', "local",
                        "<hosthame>:<ports>, hostname that will be proxied to localhost\n"
-                       "<ports> is a comma-separated list of ports (may be omitted, default: 80, 443)\n",
-                       [&](td::Slice arg) -> td::Status {
-                         return add_local_host(arg.str(), "127.0.0.1");
-                       });
+                       "<ports> is a comma-separated list of ports (may be omitted, default: 80,443)\n",
+                       [&](td::Slice arg) -> td::Status { return add_local_host(arg.str(), "127.0.0.1"); });
   p.add_option('D', "db", "db root",
                [&](td::Slice arg) { td::actor::send_closure(x, &RldpHttpProxy::set_db_root, arg.str()); });
   p.add_checked_option(

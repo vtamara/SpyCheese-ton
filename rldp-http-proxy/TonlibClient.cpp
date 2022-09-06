@@ -28,6 +28,12 @@
 TonlibClient::TonlibClient(ton::tl_object_ptr<tonlib_api::options> options) : options_(std::move(options)) {
 }
 
+TonlibClient::TonlibClient(ton::tl_object_ptr<tonlib_api::options> options,
+                           td::actor::ActorId<ton::adnl::AdnlSenderInterface> sender,
+                           ton::adnl::AdnlNodeIdShort local_id)
+    : options_(std::move(options)), sender_(std::move(sender)), local_id_(local_id) {
+}
+
 void TonlibClient::start_up() {
   class Cb : public tonlib::TonlibCallback {
    public:
@@ -46,6 +52,9 @@ void TonlibClient::start_up() {
   };
 
   tonlib_client_ = td::actor::create_actor<tonlib::TonlibClient>("tonlibclient", td::make_unique<Cb>(actor_id(this)));
+  if (!sender_.empty()) {
+    td::actor::send_closure(tonlib_client_, &tonlib::TonlibClient::set_send_via_adnl, sender_, local_id_);
+  }
   auto init = tonlib_api::make_object<tonlib_api::init>(std::move(options_));
   auto P = td::PromiseCreator::lambda([](td::Result<tonlib_api::object_ptr<tonlib_api::Object>> R) mutable {
     R.ensure();

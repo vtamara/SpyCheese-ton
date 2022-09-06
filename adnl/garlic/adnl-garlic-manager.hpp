@@ -47,6 +47,7 @@ class AdnlGarlicManager : public AdnlNetworkManager::CustomSender {
   void send_packet(AdnlNodeIdShort src, td::IPAddress dst_ip, td::BufferSlice data) override;
 
   void create_secret_id(AdnlNodeIdFull id, td::Promise<td::Unit> promise);
+  void create_secret_id_short(AdnlNodeIdShort id, td::Promise<td::Unit> promise);
 
  private:
   AdnlNodeIdShort local_id_;

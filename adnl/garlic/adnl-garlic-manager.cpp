@@ -95,6 +95,18 @@ void AdnlGarlicManager::create_secret_id(AdnlNodeIdFull id, td::Promise<td::Unit
   promise.set_result(td::Unit());
 }
 
+void AdnlGarlicManager::create_secret_id_short(AdnlNodeIdShort id, td::Promise<td::Unit> promise) {
+  td::actor::send_closure(keyring_, &keyring::Keyring::get_public_key, id.pubkey_hash(),
+                          [SelfId = actor_id(this), promise = std::move(promise)](td::Result<PublicKey> R) mutable {
+                            if (R.is_error()) {
+                              promise.set_error(R.move_as_error());
+                            } else {
+                              td::actor::send_closure(SelfId, &AdnlGarlicManager::create_secret_id,
+                                                      AdnlNodeIdFull(R.move_as_ok()), std::move(promise));
+                            }
+                          });
+}
+
 void AdnlGarlicManager::alarm() {
   td::actor::send_closure(
       overlays_, &overlay::Overlays::get_overlay_random_peers_full, local_id_, overlay_id_, 8,

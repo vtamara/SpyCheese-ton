@@ -27,10 +27,13 @@
 #include "td/actor/actor.h"
 #include "auto/tl/tonlib_api.hpp"
 #include "tonlib/tonlib/TonlibClient.h"
+#include "adnl/adnl.h"
 
 class TonlibClient : public td::actor::Actor {
  public:
   explicit TonlibClient(ton::tl_object_ptr<tonlib_api::options> options);
+  TonlibClient(ton::tl_object_ptr<tonlib_api::options> options,
+               td::actor::ActorId<ton::adnl::AdnlSenderInterface> sender, ton::adnl::AdnlNodeIdShort local_id);
 
   void start_up() override;
 
@@ -41,6 +44,9 @@ class TonlibClient : public td::actor::Actor {
   void receive_request_result(td::uint64 id, td::Result<tonlib_api::object_ptr<tonlib_api::Object>> R);
 
   ton::tl_object_ptr<tonlib_api::options> options_;
+  td::actor::ActorId<ton::adnl::AdnlSenderInterface> sender_;
+  ton::adnl::AdnlNodeIdShort local_id_;
+
   td::actor::ActorOwn<tonlib::TonlibClient> tonlib_client_;
   std::map<td::uint64, td::Promise<tonlib_api::object_ptr<tonlib_api::Object>>> requests_;
   td::uint64 next_request_id_{1};
