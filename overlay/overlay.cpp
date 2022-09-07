@@ -293,12 +293,12 @@ void OverlayImpl::alarm() {
           [SelfId = actor_id(this), dht_key = std::move(dht_key),
            oid = print_id()](td::Result<td::actor::ActorId<dht::Dht>> R) mutable {
             if (R.is_error()) {
-              VLOG(OVERLAY_NOTICE) << oid << ": can not get value from DHT: " << R.move_as_error();
+              td::actor::send_closure(SelfId, &OverlayImpl::receive_dht_nodes, R.move_as_error(), true);
               return;
             }
             auto dht_node = R.move_as_ok();
             if (dht_node.empty()) {
-              VLOG(OVERLAY_NOTICE) << oid << ": can not get value from DHT: no DHT node";
+              td::actor::send_closure(SelfId, &OverlayImpl::receive_dht_nodes, td::Status::Error("no DHT node"), true);
               return;
             }
             auto P = td::PromiseCreator::lambda([SelfId](td::Result<dht::DhtValue> res) {
@@ -348,6 +348,10 @@ void OverlayImpl::receive_dht_nodes(td::Result<dht::DhtValue> res, bool dummy) {
     }
   } else {
     VLOG(OVERLAY_NOTICE) << this << ": can not get value from DHT: " << res.move_as_error();
+  }
+
+  if (peers_.size() == 0 && !retry_dht_before_.is_in_past()) {
+    next_dht_query_ = td::Timestamp::in(0.5);
   }
 
   if (is_external_) {

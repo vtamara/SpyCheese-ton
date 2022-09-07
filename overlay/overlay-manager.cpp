@@ -267,9 +267,9 @@ void OverlayManager::get_overlay_random_peers(adnl::AdnlNodeIdShort local_id, Ov
   }
 }
 
-void OverlayManager::get_overlay_random_peers_full(adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay_id,
-                                                   td::uint32 max_peers,
-                                                   td::Promise<std::vector<adnl::AdnlNodeIdFull>> promise) {
+void OverlayManager::get_overlay_random_peers_full(
+    adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay_id, td::uint32 max_peers,
+    td::Promise<std::vector<std::pair<adnl::AdnlNodeIdFull, td::uint32>>> promise) {
   auto it = overlays_.find(local_id);
   if (it != overlays_.end()) {
     auto it2 = it->second.find(overlay_id);

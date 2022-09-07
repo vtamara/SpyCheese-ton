@@ -268,11 +268,11 @@ void OverlayImpl::get_overlay_random_peers(td::uint32 max_peers,
   promise.set_result(std::move(v));
 }
 
-void OverlayImpl::get_overlay_random_peers_full(td::uint32 max_peers,
-                                                td::Promise<std::vector<adnl::AdnlNodeIdFull>> promise) {
-  std::vector<adnl::AdnlNodeIdFull> v;
+void OverlayImpl::get_overlay_random_peers_full(
+    td::uint32 max_peers, td::Promise<std::vector<std::pair<adnl::AdnlNodeIdFull, td::uint32>>> promise) {
+  std::vector<std::pair<adnl::AdnlNodeIdFull, td::uint32>> v;
   for (auto p : get_overlay_random_peers_impl(max_peers)) {
-    v.push_back(p->get_full_id());
+    v.emplace_back(p->get_full_id(), (td::uint32)p->get_version());
   }
   promise.set_result(std::move(v));
 }

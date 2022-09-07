@@ -85,8 +85,9 @@ class OverlayManager : public Overlays {
 
   void get_overlay_random_peers(adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay, td::uint32 max_peers,
                                 td::Promise<std::vector<adnl::AdnlNodeIdShort>> promise) override;
-  void get_overlay_random_peers_full(adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay, td::uint32 max_peers,
-                                     td::Promise<std::vector<adnl::AdnlNodeIdFull>> promise) override;
+  void get_overlay_random_peers_full(
+      adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay, td::uint32 max_peers,
+      td::Promise<std::vector<std::pair<adnl::AdnlNodeIdFull, td::uint32>>> promise) override;
 
   void receive_query(adnl::AdnlNodeIdShort src, adnl::AdnlNodeIdShort dst, td::BufferSlice data,
                      td::Promise<td::BufferSlice> promise);

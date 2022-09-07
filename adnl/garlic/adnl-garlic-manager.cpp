@@ -110,24 +110,26 @@ void AdnlGarlicManager::create_secret_id_short(AdnlNodeIdShort id, td::Promise<t
 void AdnlGarlicManager::alarm() {
   td::actor::send_closure(
       overlays_, &overlay::Overlays::get_overlay_random_peers_full, local_id_, overlay_id_, 8,
-      [SelfId = actor_id(this)](td::Result<std::vector<AdnlNodeIdFull>> R) {
+      [SelfId = actor_id(this)](td::Result<std::vector<std::pair<AdnlNodeIdFull, td::uint32>>> R) {
         if (R.is_ok()) {
           td::actor::send_closure(SelfId, &AdnlGarlicManager::got_servers_from_overlay, R.move_as_ok());
         } else {
           LOG(WARNING) << "Failed to get peers: " << R.move_as_error();
-          td::actor::send_closure(SelfId, &AdnlGarlicManager::got_servers_from_overlay, std::vector<AdnlNodeIdFull>());
+          td::actor::send_closure(SelfId, &AdnlGarlicManager::got_servers_from_overlay,
+                                  std::vector<std::pair<AdnlNodeIdFull, td::uint32>>());
         }
       });
 }
 
-void AdnlGarlicManager::got_servers_from_overlay(std::vector<AdnlNodeIdFull> servers) {
-  for (AdnlNodeIdFull& id_full : servers) {
-    AdnlNodeIdShort id = id_full.compute_short_id();
-    if (servers_.count(id)) {
-      continue;
+void AdnlGarlicManager::got_servers_from_overlay(std::vector<std::pair<AdnlNodeIdFull, td::uint32>> servers) {
+  for (auto& p : servers) {
+    AdnlNodeIdShort id = p.first.compute_short_id();
+    auto& server = servers_[id];
+    if (server.id_full.empty()) {
+      LOG(DEBUG) << "Adding server " << id;
+      server.id_full = std::move(p.first);
     }
-    LOG(DEBUG) << "Adding server " << id;
-    servers_[id].id_full = std::move(id_full);
+    server.version = std::max(server.version, p.second);
   }
   try_create_connection();
   alarm_timestamp() = td::Timestamp::in(td::Random::fast(1.0, 2.0));
@@ -138,18 +140,21 @@ void AdnlGarlicManager::try_create_connection() {
     return;
   }
   size_t chain_size = config_.chain_length;
-  if (servers_.size() < chain_size) {
-    LOG(DEBUG) << "Too few servers (" << servers_.size() << ")";
+  std::vector<AdnlNodeIdFull> servers;
+  for (const auto& p : servers_) {
+    const auto& s = p.second;
+    if (s.version > s.ignore_until && !s.id_full.empty()) {
+      servers.push_back(s.id_full);
+    }
+  }
+  if (servers.size() < chain_size) {
+    LOG(DEBUG) << "Too few servers (" << servers.size() << ")";
     return;
   }
-  std::vector<AdnlNodeIdFull> chain;
-  for (const auto& p : servers_) {
-    chain.push_back(p.second.id_full);
-  }
   for (size_t i = 0; i < chain_size; ++i) {
-    std::swap(chain[i], chain[i + td::Random::secure_uint32() % (chain.size() - i)]);
+    std::swap(servers[i], servers[i + td::Random::secure_uint32() % (servers.size() - i)]);
   }
-  chain.resize(chain_size);
+  servers.resize(chain_size);
 
   class Callback : public Connection::Callback {
    public:
@@ -165,7 +170,7 @@ void AdnlGarlicManager::try_create_connection() {
    private:
     td::actor::ActorId<AdnlGarlicManager> id_;
   };
-  connection_ = td::actor::create_actor<Connection>("adnlgarlicconn", local_id_, std::move(chain),
+  connection_ = td::actor::create_actor<Connection>("adnlgarlicconn", local_id_, std::move(servers),
                                                     std::make_unique<Callback>(actor_id(this)), adnl_cat_, adnl_,
                                                     keyring_);
 }
@@ -179,6 +184,7 @@ void AdnlGarlicManager::update_addr_list(AdnlAddressList addr_list) {
 
 void AdnlGarlicManager::on_connection_fail(AdnlNodeIdShort causer) {
   connection_.reset();
+  servers_[causer].ignore_until = (td::uint32)td::Clocks::system() + 120;
   try_create_connection();
 }
 

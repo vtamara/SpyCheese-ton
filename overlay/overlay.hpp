@@ -138,8 +138,8 @@ class OverlayImpl : public Overlay {
   void send_random_peers(adnl::AdnlNodeIdShort dst, td::Promise<td::BufferSlice> promise);
   void send_random_peers_cont(adnl::AdnlNodeIdShort dst, OverlayNode node, td::Promise<td::BufferSlice> promise);
   void get_overlay_random_peers(td::uint32 max_peers, td::Promise<std::vector<adnl::AdnlNodeIdShort>> promise) override;
-  void get_overlay_random_peers_full(td::uint32 max_peers,
-                                     td::Promise<std::vector<adnl::AdnlNodeIdFull>> promise) override;
+  void get_overlay_random_peers_full(
+      td::uint32 max_peers, td::Promise<std::vector<std::pair<adnl::AdnlNodeIdFull, td::uint32>>> promise) override;
   void set_privacy_rules(OverlayPrivacyRules rules) override;
   void add_certificate(PublicKeyHash key, std::shared_ptr<Certificate> cert) override {
     certs_[key] = std::move(cert);
@@ -291,6 +291,7 @@ class OverlayImpl : public Overlay {
 
   td::DecTree<adnl::AdnlNodeIdShort, OverlayPeer> peers_;
   td::Timestamp next_dht_query_ = td::Timestamp::in(1.0);
+  td::Timestamp retry_dht_before_ = td::Timestamp::in(8.0);
   td::Timestamp update_db_at_;
   td::Timestamp update_throughput_at_;
   td::Timestamp last_throughput_update_;

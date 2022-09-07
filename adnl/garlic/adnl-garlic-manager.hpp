@@ -63,7 +63,9 @@ class AdnlGarlicManager : public AdnlNetworkManager::CustomSender {
   overlay::OverlayIdShort overlay_id_;
 
   struct Server {
-    AdnlNodeIdFull id_full;
+    AdnlNodeIdFull id_full = {};
+    td::uint32 version = 0;
+    td::uint32 ignore_until = 0;
   };
   std::map<AdnlNodeIdShort, Server> servers_;
 
@@ -97,7 +99,7 @@ class AdnlGarlicManager : public AdnlNetworkManager::CustomSender {
     std::vector<PublicKey> pubkeys_;
 
     bool ready_ = false;
-    size_t init_retries_remaining_ = 3;
+    size_t init_retries_remaining_;
     td::Bits256 init_nonce_;
     std::vector<bool> got_init_pong_;
 
@@ -125,7 +127,7 @@ class AdnlGarlicManager : public AdnlNetworkManager::CustomSender {
            (config_.use_secret_dht ? (td::uint32)AdnlLocalIdMode::custom_dht_node : 0);
   }
 
-  void got_servers_from_overlay(std::vector<AdnlNodeIdFull> servers);
+  void got_servers_from_overlay(std::vector<std::pair<AdnlNodeIdFull, td::uint32>> servers);
   void try_create_connection();
   void update_addr_list(AdnlAddressList addr_list);
   void on_connection_fail(AdnlNodeIdShort causer);

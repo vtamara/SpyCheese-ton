@@ -244,9 +244,9 @@ class Overlays : public td::actor::Actor {
 
   virtual void get_overlay_random_peers(adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay, td::uint32 max_peers,
                                         td::Promise<std::vector<adnl::AdnlNodeIdShort>> promise) = 0;
-  virtual void get_overlay_random_peers_full(adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay,
-                                             td::uint32 max_peers,
-                                             td::Promise<std::vector<adnl::AdnlNodeIdFull>> promise) = 0;
+  virtual void get_overlay_random_peers_full(
+      adnl::AdnlNodeIdShort local_id, OverlayIdShort overlay, td::uint32 max_peers,
+      td::Promise<std::vector<std::pair<adnl::AdnlNodeIdFull, td::uint32>>> promise) = 0;
   virtual void get_stats(td::Promise<tl_object_ptr<ton_api::engine_validator_overlaysStats>> promise) = 0;
 };
 

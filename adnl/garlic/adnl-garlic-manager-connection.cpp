@@ -94,12 +94,13 @@ void AdnlGarlicManager::Connection::start_up() {
 
   td::Random::secure_bytes(init_nonce_.as_slice());
   got_init_pong_.resize(chain_.size(), false);
+  LOG(INFO) << "Sending init message";
+  init_retries_remaining_ = 10;
   send_init_message();
-  alarm_timestamp() = td::Timestamp::in(3.0);
+  alarm_timestamp() = td::Timestamp::in(0.5);
 }
 
 void AdnlGarlicManager::Connection::send_init_message() {
-  LOG(INFO) << "Sending init message";
   std::vector<tl_object_ptr<ton_api::adnl_garlic_Message>> msgs;
   for (size_t i = 0; i < chain_.size(); ++i) {
     std::vector<tl_object_ptr<ton_api::adnl_garlic_Message>> cur_msgs;
@@ -145,7 +146,7 @@ void AdnlGarlicManager::Connection::alarm() {
     if (init_retries_remaining_ > 0) {
       --init_retries_remaining_;
       send_init_message();
-      alarm_timestamp() = td::Timestamp::in(3.0);
+      alarm_timestamp() = td::Timestamp::in(0.5);
       return;
     }
     size_t causer = 0;
