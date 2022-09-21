@@ -259,7 +259,7 @@ catchain.blockUpdate block:catchain.block = catchain.Update;
 catchain.block.data.badBlock block:catchain.block = catchain.block.inner.Data;
 catchain.block.data.fork left:catchain.block.Dep right:catchain.block.Dep = catchain.block.inner.Data;
 catchain.block.data.nop = catchain.block.inner.Data;
-catchain.block.data.vector msgs:(vector bytes) = catchain.block.inner.Data;
+//catchain.block.data.vector msgs:(vector bytes) = catchain.block.inner.Data;
 //catchain.block.data.custom = catchain.block.inner.Data;
 
 catchain.firstblock unique_hash:int256 nodes:(vector int256) = catchain.FirstBlock;
@@ -309,10 +309,15 @@ validatorSession.candidate src:int256 round:int root_hash:int256 data:bytes coll
 
 validatorSession.config catchain_idle_timeout:double catchain_max_deps:int round_candidates:int next_candidate_delay:double round_attempt_duration:int
         max_round_attempts:int max_block_size:int max_collated_data_size:int = validatorSession.Config;
-validatorSession.configVersioned catchain_idle_timeout:double catchain_max_deps:int round_candidates:int next_candidate_delay:double round_attempt_duration:int
-        max_round_attempts:int max_block_size:int max_collated_data_size:int version:int = validatorSession.Config;
 validatorSession.configNew catchain_idle_timeout:double catchain_max_deps:int round_candidates:int next_candidate_delay:double round_attempt_duration:int
         max_round_attempts:int max_block_size:int max_collated_data_size:int new_catchain_ids:Bool = validatorSession.Config;
+validatorSession.configVersioned catchain_idle_timeout:double catchain_max_deps:int round_candidates:int next_candidate_delay:double round_attempt_duration:int
+        max_round_attempts:int max_block_size:int max_collated_data_size:int version:int = validatorSession.Config;
+
+validatorSession.catchainOptions idle_timeout:double max_deps:int max_block_size:int block_hash_covers_data:Bool
+        max_block_height_ceoff:int debug_disable_db:Bool = validatorSession.CatChainOptions;
+validatorSession.configVersionedV2 catchain_opts:validatorSession.CatChainOptions round_candidates:int next_candidate_delay:double
+        round_attempt_duration:int max_round_attempts:int max_block_size:int max_collated_data_size:int version:int = validatorSession.Config;
 
 ---functions---
 
@@ -625,6 +630,10 @@ engine.validator.overlayStatsNode adnl_id:int256 ip_addr:string bdcst_errors:int
 engine.validator.overlayStats overlay_id:int256 overlay_id_full:PublicKey adnl_id:int256 scope:string nodes:(vector engine.validator.overlayStatsNode) stats:(vector engine.validator.oneStat) = engine.validator.OverlayStats;
 engine.validator.overlaysStats overlays:(vector engine.validator.overlayStats) = engine.validator.OverlaysStats;
 
+engine.validator.onePerfTimerStat time:int min:double avg:double max:double = engine.validator.OnePerfTimerStat;
+engine.validator.perfTimerStatsByName name:string stats:(vector engine.validator.OnePerfTimerStat) = engine.validator.PerfTimerStatsByName;
+engine.validator.perfTimerStats stats:(vector engine.validator.PerfTimerStatsByName) = engine.validator.PerfTimerStats;
+
 
 ---functions---
 
@@ -675,6 +684,8 @@ engine.validator.importCertificate overlay_id:int256 local_id:adnl.id.short sign
 engine.validator.signShardOverlayCertificate workchain:int shard:long signed_key:engine.validator.KeyHash expire_at:int max_size:int = overlay.Certificate;
 engine.validator.importShardOverlayCertificate workchain:int shard:long signed_key:engine.validator.KeyHash cert:overlay.Certificate = engine.validator.Success;
 
+engine.validator.getPerfTimerStats name:string = engine.validator.PerfTimerStats;
+
 ---types---
 
 storage.pong = storage.Pong;
@@ -716,3 +727,13 @@ http.server.host domains:(vector string) ip:int port:int adnl_id:adnl.id.short =
 http.server.config dhs:(vector http.server.dnsEntry) local_hosts:(vector http.server.host) = http.server.Config;
 
 ---functions---
+
+---types---
+
+validatorSession.statsProducer id:int256 block_status:int block_timestamp:long = validatorSession.StatsProducer;
+
+validatorSession.statsRound timestamp:long producers:(vector validatorSession.statsProducer) = validatorSession.StatsRound;
+
+validatorSession.stats id:tonNode.blockId timestamp:long self:int256 creator:int256 total_validators:int total_weight:long
+    signatures:int signatures_weight:long approve_signatures:int approve_signatures_weight:long
+    first_round:int rounds:(vector validatorSession.statsRound) = validatorSession.Stats;

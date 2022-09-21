@@ -430,6 +430,7 @@ class TonlibCli : public td::actor::Actor {
                             << "\t 'e' modifier - encrypt all messages\n"
                             << "\t 'k' modifier - use fake key\n"
                             << "\t 'c' modifier - just esmitate fees\n";
+      td::TerminalIO::out() << "getmasterchainsignatures <seqno> - get sigratures of masterchain block <seqno>\n";
     } else if (cmd == "genkey") {
       generate_key();
     } else if (cmd == "exit" || cmd == "quit") {
@@ -510,6 +511,9 @@ class TonlibCli : public td::actor::Actor {
       auto key = parser.read_word();
       auto init_key = parser.read_word();
       guess_account(key, init_key, std::move(cmd_promise));
+    } else if (cmd == "getmasterchainsignatures") {
+      auto seqno = parser.read_word();
+      run_get_masterchain_block_signatures(seqno, std::move(cmd_promise));
     } else {
       cmd_promise.set_error(td::Status::Error(PSLICE() << "Unkwnown query `" << cmd << "`"));
     }
@@ -1162,7 +1166,7 @@ class TonlibCli : public td::actor::Actor {
     promise.set_error(td::Status::Error("Unknown command"));
   }
 
-  void do_dns_resolve(std::string name, td::int16 category, td::int32 ttl,
+  void do_dns_resolve(std::string name, td::Bits256 category, td::int32 ttl,
                       tonlib_api::object_ptr<tonlib_api::dns_resolved> resolved, td::Promise<td::Unit> promise) {
     if (resolved->entries_.empty()) {
       td::TerminalIO::out() << "No dns entries found\n";
@@ -1192,11 +1196,12 @@ class TonlibCli : public td::actor::Actor {
     TRY_RESULT_PROMISE(promise, address, to_account_address(key_id, false));
     auto name = parser.read_word();
     auto category_str = parser.read_word();
-    TRY_RESULT_PROMISE(promise, category, td::to_integer_safe<td::int16>(category_str));
+    td::Bits256 category = category_str.empty() ? td::Bits256::zero() : td::sha256_bits256(td::as_slice(category_str));
 
     std::vector<tonlib_api::object_ptr<tonlib_api::dns_entry>> entries;
     entries.push_back(make_object<tonlib_api::dns_entry>(
-        "", -1, make_object<tonlib_api::dns_entryDataNextResolver>(std::move(address.address))));
+        "", ton::DNS_NEXT_RESOLVER_CATEGORY,
+        make_object<tonlib_api::dns_entryDataNextResolver>(std::move(address.address))));
     do_dns_resolve(name.str(), category, 10, make_object<tonlib_api::dns_resolved>(std::move(entries)),
                    std::move(promise));
   }
@@ -1217,8 +1222,8 @@ class TonlibCli : public td::actor::Actor {
       if (action.name.empty()) {
         actions.push_back(make_object<tonlib_api::dns_actionDeleteAll>());
         td::TerminalIO::out() << "Delete all dns entries\n";
-      } else if (action.category == 0) {
-        actions.push_back(make_object<tonlib_api::dns_actionDelete>(action.name, 0));
+      } else if (action.category.is_zero()) {
+        actions.push_back(make_object<tonlib_api::dns_actionDelete>(action.name, td::Bits256::zero()));
         td::TerminalIO::out() << "Delete all dns enties with name: " << action.name << "\n";
       } else if (!action.data) {
         actions.push_back(make_object<tonlib_api::dns_actionDelete>(action.name, action.category));
@@ -1234,8 +1239,8 @@ class TonlibCli : public td::actor::Actor {
         TRY_RESULT_PROMISE(promise, data, tonlib::to_tonlib_api(action.data.value()));
         sb << action.data.value();
         TRY_STATUS_PROMISE(promise, std::move(error));
-        td::TerminalIO::out() << "Set dns entry: " << action.name << ":" << action.category << " " << sb.as_cslice()
-                              << "\n";
+        td::TerminalIO::out() << "Set dns entry: " << action.name << ":" << action.category << " "
+                              << sb.as_cslice() << "\n";
         actions.push_back(make_object<tonlib_api::dns_actionSet>(
             make_object<tonlib_api::dns_entry>(action.name, action.category, std::move(data))));
       }
@@ -2093,6 +2098,18 @@ class TonlibCli : public td::actor::Actor {
                  td::TerminalIO::out() << to_string(revisions);
                  return td::Unit();
                }));
+  }
+
+  void run_get_masterchain_block_signatures(td::Slice seqno_s, td::Promise<td::Unit> promise) {
+    TRY_RESULT_PROMISE(promise, seqno, td::to_integer_safe<td::int32>(seqno_s));
+    send_query(make_object<tonlib_api::blocks_getMasterchainBlockSignatures>(seqno), promise.wrap([](auto signatures) {
+      td::TerminalIO::out() << "Signatures: " << signatures->signatures_.size() << "\n";
+      for (const auto& s : signatures->signatures_) {
+        td::TerminalIO::out() << "  " << s->node_id_short_ << " : " << td::base64_encode(td::Slice(s->signature_))
+                              << "\n";
+      }
+      return td::Unit();
+    }));
   }
 
   void get_history2(td::Slice key, td::Result<tonlib_api::object_ptr<tonlib_api::fullAccountState>> r_state,
