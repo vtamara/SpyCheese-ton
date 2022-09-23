@@ -145,11 +145,14 @@ adnl.tunnel.customMessage data:bytes = adnl.tunnel.CustomMessage;
 
 adnl.garlic.forwardToUdp flags:# ipv4:flags.0?int ipv6:flags.1?int128 port:int data:bytes = adnl.garlic.Message;
 adnl.garlic.forwardToNext dst:int256 encrypted_data:bytes = adnl.garlic.Message;
+adnl.garlic.forwardToNextChannel dst:int256 key_id:int256 encrypted_data:bytes = adnl.garlic.Message;
 adnl.garlic.createTunnelMidpoint encrypt_via:PublicKey proxy_to:int256 message_prefix:int256 = adnl.garlic.Message;
 adnl.garlic.ping tunnel_id:int256 nonce:int256 = adnl.garlic.Message;
+adnl.garlic.createChannel key:PrivateKey = adnl.garlic.Message;
 
 adnl.garlic.multipleMessages messages:(vector adnl.garlic.Message) = adnl.garlic.Message;
 adnl.garlic.encryptedMessage data:bytes = adnl.garlic.Message;
+adnl.garlic.encryptedMessageChannel key_id:int256 data:bytes = adnl.garlic.Message;
 
 adnl.garlic.pong nonce:int256 = adnl.garlic.QueryAnswer;
 

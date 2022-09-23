@@ -24,63 +24,50 @@ namespace ton {
 namespace adnl {
 
 void AdnlInboundTunnelEndpoint::receive_packet(AdnlNodeIdShort src, td::IPAddress src_addr, td::BufferSlice datagram) {
-  receive_packet_cont(src, src_addr, std::move(datagram), 0);
-}
-
-void AdnlInboundTunnelEndpoint::receive_packet_cont(AdnlNodeIdShort src, td::IPAddress src_addr,
-                                                    td::BufferSlice datagram, size_t idx) {
-  auto prefix = fetch_tl_prefix<ton_api::adnl_tunnel_packetPrefix>(datagram, true);
-  if (prefix.is_error()) {
-    VLOG(ADNL_INFO) << "dropping datagram with invalid prefix";
-    return;
-  }
-  if (prefix.ok()->id_ != decrypt_via_[idx].bits256_value()) {
-    VLOG(ADNL_INFO) << "invalid tunnel midpoint";
-    return;
-  }
-
-  auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), src, src_addr, idx](td::Result<td::BufferSlice> R) {
+  for (size_t idx = 0; idx < decryptors_.size(); ++idx) {
+    auto prefix = fetch_tl_prefix<ton_api::adnl_tunnel_packetPrefix>(datagram, true);
+    if (prefix.is_error()) {
+      VLOG(ADNL_INFO) << "dropping datagram with invalid prefix";
+      return;
+    }
+    if (prefix.ok()->id_ != decryptors_[idx].second) {
+      VLOG(ADNL_INFO) << "invalid tunnel midpoint";
+      return;
+    }
+    auto R = decryptors_[idx].first->decrypt(std::move(datagram));
     if (R.is_error()) {
       VLOG(ADNL_INFO) << "dropping tunnel packet: failed to decrypt: " << R.move_as_error();
       return;
-    } else {
-      td::actor::send_closure(SelfId, &AdnlInboundTunnelEndpoint::decrypted_packet, src, src_addr, R.move_as_ok(), idx);
     }
-  });
-  td::actor::send_closure(keyring_, &keyring::Keyring::decrypt_message, decrypt_via_[idx], std::move(datagram),
-                          std::move(P));
-}
-
-void AdnlInboundTunnelEndpoint::decrypted_packet(AdnlNodeIdShort src, td::IPAddress src_addr, td::BufferSlice data,
-                                                 size_t idx) {
-  if (idx == decrypt_via_.size() - 1) {
-    AdnlCategoryMask cat_mask;
-    cat_mask.set();
-    td::actor::send_closure(adnl_, &Adnl::receive_packet, src_addr, cat_mask, std::move(data));
-    return;
-  }
-  auto F = fetch_tl_object<ton_api::adnl_tunnel_packetContents>(data, true);
-  if (F.is_error()) {
-    auto F2 = fetch_tl_object<ton_api::adnl_tunnel_customMessage>(data, true);
-    if (F2.is_ok()) {
-      if (callback_) {
-        callback_->receive_custom_message(idx, std::move(F2.ok()->data_));
+    datagram = R.move_as_ok();
+    if (idx == decryptors_.size() - 1) {
+      break;
+    }
+    auto F = fetch_tl_object<ton_api::adnl_tunnel_packetContents>(datagram, true);
+    if (F.is_error()) {
+      auto F2 = fetch_tl_object<ton_api::adnl_tunnel_customMessage>(datagram, true);
+      if (F2.is_ok()) {
+        if (callback_) {
+          callback_->receive_custom_message(idx, std::move(F2.ok()->data_));
+        }
+        return;
       }
+      VLOG(ADNL_INFO) << "dropping tunnel packet: failed to fetch: " << F.move_as_error();
       return;
     }
-    VLOG(ADNL_INFO) << "dropping tunnel packet: failed to fetch: " << F.move_as_error();
-    return;
+    auto packet = F.move_as_ok();
+    td::IPAddress addr;
+    if (packet->flags_ & 1) {
+      addr.init_host_port(td::IPAddress::ipv4_to_str(packet->from_ip_), packet->from_port_).ignore();
+    }
+    if (!(packet->flags_ & 2)) {
+      return;
+    }
+    datagram = std::move(packet->message_);
   }
-  auto packet = F.move_as_ok();
-
-  td::IPAddress addr;
-  if (packet->flags_ & 1) {
-    addr.init_host_port(td::IPAddress::ipv4_to_str(packet->from_ip_), packet->from_port_).ignore();
-  }
-
-  if (packet->flags_ & 2) {
-    receive_packet_cont(src, addr, std::move(packet->message_), idx + 1);
-  }
+  AdnlCategoryMask cat_mask;
+  cat_mask.set();
+  td::actor::send_closure(adnl_, &Adnl::receive_packet, src_addr, cat_mask, std::move(datagram));
 }
 
 void AdnlInboundTunnelMidpoint::start_up() {

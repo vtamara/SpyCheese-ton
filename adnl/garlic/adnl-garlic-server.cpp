@@ -24,9 +24,12 @@ namespace adnl {
 static const std::vector<std::string> PREFIXES = {
     Adnl::int_to_bytestring(ton_api::adnl_garlic_forwardToUdp::ID),
     Adnl::int_to_bytestring(ton_api::adnl_garlic_forwardToNext::ID),
+    Adnl::int_to_bytestring(ton_api::adnl_garlic_forwardToNextChannel::ID),
     Adnl::int_to_bytestring(ton_api::adnl_garlic_createTunnelMidpoint::ID),
+    Adnl::int_to_bytestring(ton_api::adnl_garlic_createChannel::ID),
     Adnl::int_to_bytestring(ton_api::adnl_garlic_multipleMessages::ID),
     Adnl::int_to_bytestring(ton_api::adnl_garlic_encryptedMessage::ID),
+    Adnl::int_to_bytestring(ton_api::adnl_garlic_encryptedMessageChannel::ID),
     Adnl::int_to_bytestring(ton_api::adnl_garlic_ping::ID)
 };
 static const double TUNNEL_TTL = 300.0;
@@ -92,6 +95,21 @@ void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic
                           });
 }
 
+void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_encryptedMessageChannel& obj) {
+  auto it = garlic_channels_.find(obj.key_id_);
+  if (it == garlic_channels_.end()) {
+    LOG(DEBUG) << "Failed to decrypt incoming message: no such channel";
+    return;
+  }
+  auto R = it->second.decryptor->decrypt(std::move(obj.data_));
+  if (R.is_error()) {
+    LOG(DEBUG) << "Failed to decrypt incoming message: " << R.move_as_error();
+  } else {
+    receive_message(src, R.move_as_ok());
+    it->second.ttl = td::Timestamp::in(TUNNEL_TTL);
+  }
+}
+
 void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_multipleMessages& obj) {
   for (auto& msg : obj.messages_) {
     process_message(src, std::move(msg));
@@ -119,6 +137,12 @@ void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic
       create_serialize_tl_object<ton_api::adnl_garlic_encryptedMessage>(std::move(obj.encrypted_data_)));
 }
 
+void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_forwardToNextChannel& obj) {
+  td::actor::send_closure(adnl_, &Adnl::send_message, local_id_, AdnlNodeIdShort(obj.dst_),
+                          create_serialize_tl_object<ton_api::adnl_garlic_encryptedMessageChannel>(
+                              obj.key_id_, std::move(obj.encrypted_data_)));
+}
+
 void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_createTunnelMidpoint& obj) {
   if (tunnels_.count(obj.message_prefix_)) {
     LOG(DEBUG) << "Failed to create tunnel: duplicate id";
@@ -134,7 +158,7 @@ void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic
     void receive_message(AdnlNodeIdShort src, AdnlNodeIdShort dst, td::BufferSlice data) override {
       td::actor::send_closure(tunnel_, &AdnlInboundTunnelMidpoint::receive_packet, src, td::IPAddress(),
                               std::move(data));
-      td::actor::send_closure(actor_, &AdnlGarlicServer::update_ttl, id_);
+      td::actor::send_closure(actor_, &AdnlGarlicServer::update_tunnel_ttl, id_);
     }
     void receive_query(AdnlNodeIdShort src, AdnlNodeIdShort dst, td::BufferSlice data,
                        td::Promise<td::BufferSlice> promise) override {
@@ -155,6 +179,21 @@ void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic
                                   td::Timestamp::in(TUNNEL_TTL)});
 }
 
+void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_createChannel& obj) {
+  PrivateKey key(obj.key_);
+  td::Bits256 id = key.compute_short_id().bits256_value();
+  if (garlic_channels_.count(id)) {
+    LOG(DEBUG) << "Failed to create channel: duplicate id";
+    return;
+  }
+  auto R = key.create_decryptor();
+  if (garlic_channels_.count(id)) {
+    LOG(DEBUG) << "Failed to create decryptor for channel: " << R.move_as_error();
+    return;
+  }
+  garlic_channels_.emplace(id, GarlicChannel{R.move_as_ok(), td::Timestamp::in(TUNNEL_TTL)});
+}
+
 void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_ping& obj) {
   auto it = tunnels_.find(obj.tunnel_id_);
   if (it == tunnels_.end()) {
@@ -166,7 +205,7 @@ void AdnlGarlicServer::process_message(AdnlNodeIdShort src, ton_api::adnl_garlic
                           create_serialize_tl_object<ton_api::adnl_garlic_pong>(obj.nonce_));
 }
 
-void AdnlGarlicServer::update_ttl(td::Bits256 id) {
+void AdnlGarlicServer::update_tunnel_ttl(td::Bits256 id) {
   auto it = tunnels_.find(id);
   if (it == tunnels_.end()) {
     return;
@@ -181,6 +220,14 @@ void AdnlGarlicServer::alarm() {
       it = tunnels_.erase(it);
     } else {
       ++it;
+    }
+  }
+  auto it2 = garlic_channels_.begin();
+  while (it2 != garlic_channels_.end()) {
+    if (it2->second.ttl && it2->second.ttl.is_in_past()) {
+      it2 = garlic_channels_.erase(it2);
+    } else {
+      ++it2;
     }
   }
   alarm_timestamp() = td::Timestamp::in(60.0);

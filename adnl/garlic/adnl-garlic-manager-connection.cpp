@@ -48,14 +48,40 @@ void AdnlGarlicManager::Connection::start_up() {
       stop();
       return;
     }
-    encryptors_.push_back(E.move_as_ok());
+    init_encryptors_.push_back(E.move_as_ok());
   }
-  std::vector<PublicKeyHash> decrypt_via;
+  std::vector<std::pair<std::unique_ptr<Decryptor>, td::Bits256>> decryptors;
   for (size_t i = 0; i < chain_.size() + 1; ++i) {
-    PrivateKey private_key(privkeys::Ed25519::random());
+    td::Bits256 key;
+    td::Random::secure_bytes(key.as_slice());
+    PrivateKey private_key =
+        i == chain_.size() ? PrivateKey(privkeys::Unenc(key.as_slice())) : PrivateKey(privkeys::AES(key.as_slice()));
     pubkeys_.push_back(private_key.compute_public_key());
-    decrypt_via.push_back(pubkeys_.back().compute_short_id());
-    td::actor::send_closure(keyring_, &keyring::Keyring::add_key, std::move(private_key), true, [](td::Unit) {});
+    auto D = private_key.create_decryptor();
+      if (D.is_error()) {
+        LOG(WARNING) << "Failed to create decryptor: " << D.move_as_error();
+        callback_->on_fail();
+        stop();
+        return;
+      }
+    decryptors.emplace_back(D.move_as_ok(), pubkeys_.back().compute_short_id().bits256_value());
+  }
+
+  encryptors_.resize(chain_.size());
+  for (size_t i = 1; i < chain_.size(); ++i) { // No channel for 1st node
+    ChannelEncryptor& e = encryptors_[i];
+    td::Bits256 key;
+    td::Random::secure_bytes(key.as_slice());
+    e.key = PrivateKey(privkeys::AES(key.as_slice()));
+    e.id = e.key.compute_short_id().bits256_value();
+    auto E = e.key.compute_public_key().create_encryptor();
+    if (E.is_error()) {
+      LOG(WARNING) << "Failed to create channel encryptor: " << E.move_as_error();
+      callback_->on_fail();
+      stop();
+      return;
+    }
+    e.encryptor = E.move_as_ok();
   }
 
   AdnlCategoryMask cat_mask;
@@ -71,7 +97,7 @@ void AdnlGarlicManager::Connection::start_up() {
     td::actor::ActorId<AdnlGarlicManager::Connection> id_;
   };
   auto tunnel_callback = std::make_unique<TunnelCallback>(actor_id(this));
-  endpoint_ = td::actor::create_actor<AdnlInboundTunnelEndpoint>("adnltunnelendpoint", std::move(decrypt_via), cat_mask,
+  endpoint_ = td::actor::create_actor<AdnlInboundTunnelEndpoint>("adnltunnelendpoint", std::move(decryptors), cat_mask,
                                                                  std::move(tunnel_callback), keyring_, adnl_);
 
   class AdnlCallback : public Adnl::Callback {
@@ -105,6 +131,11 @@ void AdnlGarlicManager::Connection::send_init_message() {
   for (size_t i = 0; i < chain_.size(); ++i) {
     std::vector<tl_object_ptr<ton_api::adnl_garlic_Message>> cur_msgs;
     td::Bits256 tunnel_id = pubkeys_[i + 1].compute_short_id().tl();
+    if (i > 0) {
+      ChannelEncryptor& e = encryptors_[i];
+      CHECK(e.encryptor);
+      cur_msgs.push_back(create_tl_object<ton_api::adnl_garlic_createChannel>(e.key.tl()));
+    }
     cur_msgs.push_back(create_tl_object<ton_api::adnl_garlic_createTunnelMidpoint>(
         pubkeys_[i].tl(), (i == 0 ? local_id_ : chain_[i - 1]).bits256_value(),
         tunnel_id));
@@ -112,12 +143,6 @@ void AdnlGarlicManager::Connection::send_init_message() {
     msgs.push_back(create_tl_object<ton_api::adnl_garlic_multipleMessages>(std::move(cur_msgs)));
   }
   wrap_send_message(std::move(msgs));
-}
-
-void AdnlGarlicManager::Connection::tear_down() {
-  for (const PublicKey& pub : pubkeys_) {
-    td::actor::send_closure(keyring_, &keyring::Keyring::del_key, pub.compute_short_id(), [](td::Unit) {});
-  }
 }
 
 void AdnlGarlicManager::Connection::send_packet(AdnlNodeIdShort src, td::IPAddress dst_ip, td::BufferSlice data) {
@@ -227,14 +252,25 @@ void AdnlGarlicManager::Connection::wrap_send_message(std::vector<tl_object_ptr<
         obj = create_tl_object<ton_api::adnl_garlic_multipleMessages>();
       }
     } else {
-      auto R = encryptors_[i + 1]->encrypt(message.as_slice());
-      if (R.is_error()) {
-        LOG(DEBUG) << "Failed to encrypt message with pubkey of " << chain_[i + 1] << ": "
-                   << R.move_as_error();
-        return;
+      tl_object_ptr<ton_api::adnl_garlic_Message> forward;
+      if (ready_) {
+        ChannelEncryptor& e = encryptors_[i + 1];
+        CHECK(e.encryptor);
+        auto R = e.encryptor->encrypt(message.as_slice());
+        if (R.is_error()) {
+          LOG(DEBUG) << "Failed to encrypt message with pubkey of " << chain_[i + 1] << ": " << R.move_as_error();
+          return;
+        }
+        forward = create_tl_object<ton_api::adnl_garlic_forwardToNextChannel>(chain_[i + 1].bits256_value(), e.id,
+                                                                              R.move_as_ok());
+      } else {
+        auto R = init_encryptors_[i + 1]->encrypt(message.as_slice());
+        if (R.is_error()) {
+          LOG(DEBUG) << "Failed to encrypt message with pubkey of " << chain_[i + 1] << ": " << R.move_as_error();
+          return;
+        }
+        forward = create_tl_object<ton_api::adnl_garlic_forwardToNext>(chain_[i + 1].bits256_value(), R.move_as_ok());
       }
-      auto forward =
-          create_tl_object<ton_api::adnl_garlic_forwardToNext>(chain_[i + 1].bits256_value(), R.move_as_ok());
       if (obj) {
         ton_api::downcast_call(
             *obj,

@@ -59,17 +59,25 @@ class AdnlGarlicServer : public td::actor::Actor {
     td::Timestamp ttl;
   };
   std::map<td::Bits256, TunnelMidpoint> tunnels_;
+  struct GarlicChannel {
+    std::unique_ptr<Decryptor> decryptor;
+    td::Timestamp ttl;
+  };
+  std::map<td::Bits256, GarlicChannel> garlic_channels_;
 
   void receive_message(AdnlNodeIdShort src, td::BufferSlice data);
   void process_message(AdnlNodeIdShort src, tl_object_ptr<ton_api::adnl_garlic_Message> obj);
   void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_encryptedMessage& obj);
+  void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_encryptedMessageChannel& obj);
   void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_multipleMessages& obj);
   void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_forwardToUdp& obj);
   void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_forwardToNext& obj);
+  void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_forwardToNextChannel& obj);
   void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_createTunnelMidpoint& obj);
+  void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_createChannel& obj);
   void process_message(AdnlNodeIdShort src, ton_api::adnl_garlic_ping& obj);
 
-  void update_ttl(td::Bits256 id);
+  void update_tunnel_ttl(td::Bits256 id);
 };
 
 }  // namespace adnl

@@ -81,7 +81,6 @@ class AdnlGarlicManager : public AdnlNetworkManager::CustomSender {
     Connection(AdnlNodeIdShort local_id, std::vector<AdnlNodeIdFull> chain, std::unique_ptr<Callback> callback,
                td::uint8 adnl_cat, td::actor::ActorId<Adnl> adnl, td::actor::ActorId<keyring::Keyring> keyring);
     void start_up() override;
-    void tear_down() override;
     void send_packet(AdnlNodeIdShort src, td::IPAddress dst_ip, td::BufferSlice data);
     void alarm() override;
 
@@ -93,10 +92,17 @@ class AdnlGarlicManager : public AdnlNetworkManager::CustomSender {
     td::actor::ActorId<keyring::Keyring> keyring_;
     std::vector<AdnlNodeIdFull> chain_full_;
     std::vector<AdnlNodeIdShort> chain_;
-    std::vector<std::unique_ptr<Encryptor>> encryptors_;
+    std::vector<std::unique_ptr<Encryptor>> init_encryptors_;
     td::actor::ActorOwn<AdnlInboundTunnelEndpoint> endpoint_;
     AdnlSubscribeGuard guard_;
     std::vector<PublicKey> pubkeys_;
+
+    struct ChannelEncryptor {
+      PrivateKey key;
+      td::Bits256 id;
+      std::unique_ptr<Encryptor> encryptor;
+    };
+    std::vector<ChannelEncryptor> encryptors_;
 
     bool ready_ = false;
     size_t init_retries_remaining_;
