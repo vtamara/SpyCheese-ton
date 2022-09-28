@@ -42,10 +42,12 @@ class TonlibClient : public td::actor::Actor {
 
  private:
   void receive_request_result(td::uint64 id, td::Result<tonlib_api::object_ptr<tonlib_api::Object>> R);
+  void receive_adnl_result(td::int64 id, td::Result<td::BufferSlice> R);
 
   ton::tl_object_ptr<tonlib_api::options> options_;
   td::actor::ActorId<ton::adnl::AdnlSenderInterface> sender_;
   ton::adnl::AdnlNodeIdShort local_id_;
+  ton::adnl::AdnlNodeIdShort custom_server_id_ = ton::adnl::AdnlNodeIdShort::zero();
 
   td::actor::ActorOwn<tonlib::TonlibClient> tonlib_client_;
   std::map<td::uint64, td::Promise<tonlib_api::object_ptr<tonlib_api::Object>>> requests_;
