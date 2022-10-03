@@ -56,21 +56,33 @@ int exec_priv_to_pub(VmState* st) {
   return 0;
 }
 
-int exec_sign(VmState* st) {
-  VM_LOG(st) << "execute SIGN";
+int exec_sign(VmState* st, bool from_slice) {
+  VM_LOG(st) << "execute SIGN" << (from_slice ? "S" : "");
   Stack& stack = st->get_stack();
   auto key_int = stack.pop_int();
-  auto x = stack.pop_int();
   unsigned char key_bytes[32];
   if (!key_int->export_bytes(key_bytes, 32, false)) {
     throw VmError{Excno::range_chk, "Ed25519 private key must fit in an unsigned 256-bit integer"};
   }
-  unsigned char data_bytes[32];
-  if (!x->export_bytes(data_bytes, 32, false)) {
-    throw VmError{Excno::range_chk, "Hash must fit in an unsigned 256-bit integer"};
+  unsigned char data_bytes[128];
+  size_t data_len;
+  if (from_slice) {
+    auto cs = stack.pop_cellslice();
+    if (cs->size() & 7) {
+      throw VmError{Excno::cell_und, "Slice does not consist of an integer number of bytes"};
+    }
+    data_len = (cs->size() >> 3);
+    CHECK(data_len <= sizeof(data_bytes));
+    CHECK(cs->prefetch_bytes(data_bytes, data_len));
+  } else {
+    auto x = stack.pop_int();
+    data_len = 32;
+    if (!x->export_bytes(data_bytes, 32, false)) {
+      throw VmError{Excno::range_chk, "Hash must fit in an unsigned 256-bit integer"};
+    }
   }
   td::Ed25519::PrivateKey priv_key{td::SecureString(td::Slice{key_bytes, 32})};
-  auto signature = priv_key.sign(td::Slice(data_bytes, 32));
+  auto signature = priv_key.sign(td::Slice(data_bytes, data_len));
   if (signature.is_error()) {
     throw VmError{Excno::unknown, signature.error().to_string()};
   }
@@ -90,8 +102,9 @@ void register_toncli_local_ops(OpcodeTable& cp0) {
   using namespace std::placeholders;
   cp0.insert(OpcodeInstr::mksimple(0xfeef10, 24, "GASLIMITSTEMP", exec_gas_limits_temp))
      .insert(OpcodeInstr::mksimple(0xfeef11, 24, "PRIVTOPUB", exec_priv_to_pub))
-     .insert(OpcodeInstr::mksimple(0xfeef12, 24, "SIGN", exec_sign))
-     .insert(OpcodeInstr::mksimple(0xfeef13, 24, "RESETLOADEDCELLS", exec_reset_loaded_cells));
+     .insert(OpcodeInstr::mksimple(0xfeef12, 24, "SIGN", std::bind(exec_sign, _1, false)))
+     .insert(OpcodeInstr::mksimple(0xfeef13, 24, "RESETLOADEDCELLS", exec_reset_loaded_cells))
+     .insert(OpcodeInstr::mksimple(0xfeef14, 24, "SIGNS", std::bind(exec_sign, _1, true)));
 }
 
 }  // namespace vm
