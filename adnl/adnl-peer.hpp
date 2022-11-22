@@ -89,6 +89,7 @@ class AdnlPeerPairImpl : public AdnlPeerPair {
   void update_peer_id(AdnlNodeIdFull id) override;
 
   void get_conn_ip_str(td::Promise<td::string> promise) override;
+  void get_actual_ip(td::Promise<td::IPAddress> promise) override;
 
   void got_data_from_db(td::Result<AdnlDbItem> R);
   void got_data_from_static_nodes(td::Result<AdnlNode> R);
@@ -246,6 +247,7 @@ class AdnlPeerPairImpl : public AdnlPeerPair {
   bool received_from_db_ = false;
   bool received_from_static_nodes_ = false;
   bool dht_query_active_ = false;
+  td::IPAddress last_in_packet_ip_;
 
   td::Timestamp next_dht_query_at_ = td::Timestamp::never();
   td::Timestamp next_db_update_at_ = td::Timestamp::never();
@@ -268,6 +270,7 @@ class AdnlPeerImpl : public AdnlPeer {
                         AdnlAddressList addr_list) override;
   void update_dht_node(td::actor::ActorId<dht::Dht> dht_node) override;
   void get_conn_ip_str(AdnlNodeIdShort l_id, td::Promise<td::string> promise) override;
+  void get_actual_ip(AdnlNodeIdShort local_id, td::Promise<td::IPAddress> promise) override;
   //void check_signature(td::BufferSlice data, td::BufferSlice signature, td::Promise<td::Unit> promise) override;
 
   AdnlPeerImpl(td::actor::ActorId<AdnlNetworkManager> network_manager, td::actor::ActorId<AdnlPeerTable> peer_table,

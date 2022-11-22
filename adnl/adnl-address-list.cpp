@@ -189,6 +189,14 @@ td::Ref<AdnlAddressImpl> AdnlAddressImpl::create(const tl_object_ptr<ton_api::ad
   return res;
 }
 
+td::Result<td::Ref<AdnlAddressImpl>> AdnlAddressImpl::create_udp(const td::IPAddress &addr) {
+  if (addr.is_ipv4()) {
+    return td::make_ref<AdnlAddressUdp>(addr.get_ipv4(), static_cast<td::uint16>(addr.get_port()));
+  } else {
+    return td::Status::Error(ErrorCode::protoviolation, "only works with ipv4");
+  }
+}
+
 bool AdnlAddressList::public_only() const {
   for (auto &addr : addrs_) {
     if (!addr->is_public()) {
@@ -235,13 +243,9 @@ td::Result<AdnlAddressList> AdnlAddressList::create(const tl_object_ptr<ton_api:
 }
 
 td::Status AdnlAddressList::add_udp_address(td::IPAddress addr) {
-  if (addr.is_ipv4()) {
-    auto r = td::make_ref<AdnlAddressUdp>(addr.get_ipv4(), static_cast<td::uint16>(addr.get_port()));
-    addrs_.push_back(std::move(r));
-    return td::Status::OK();
-  } else {
-    return td::Status::Error(ErrorCode::protoviolation, "only works with ipv4");
-  }
+  TRY_RESULT(adnl_address, AdnlAddressImpl::create_udp(addr));
+  addrs_.push_back(std::move(adnl_address));
+  return td::Status::OK();
 }
 
 }  // namespace adnl

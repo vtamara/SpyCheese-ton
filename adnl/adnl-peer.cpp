@@ -165,6 +165,8 @@ void AdnlPeerPairImpl::receive_packet_checked(AdnlPacket packet) {
   // accepted
   // delivering
 
+  last_in_packet_ip_ = packet.remote_addr();
+
   if (packet.seqno() > 0) {
     add_received_packet(packet.seqno());
   }
@@ -747,6 +749,14 @@ void AdnlPeerPairImpl::get_conn_ip_str(td::Promise<td::string> promise) {
   promise.set_value("undefined");
 }
 
+void AdnlPeerPairImpl::get_actual_ip(td::Promise<td::IPAddress> promise) {
+  if (last_in_packet_ip_.is_valid()) {
+    promise.set_result(last_in_packet_ip_);
+  } else {
+    promise.set_error(td::Status::Error("No address"));
+  }
+}
+
 void AdnlPeerImpl::update_id(AdnlNodeIdFull id) {
   CHECK(id.compute_short_id() == peer_id_short_);
   if (!peer_id_.empty()) {
@@ -871,6 +881,15 @@ void AdnlPeerImpl::get_conn_ip_str(AdnlNodeIdShort l_id, td::Promise<td::string>
   } 
 
   td::actor::send_closure(it->second, &AdnlPeerPair::get_conn_ip_str, std::move(promise));
+}
+
+void AdnlPeerImpl::get_actual_ip(AdnlNodeIdShort local_id, td::Promise<td::IPAddress> promise) {
+  auto it = peer_pairs_.find(local_id);
+  if (it == peer_pairs_.end()) {
+    promise.set_error(td::Status::Error("Unknown local id"));
+    return;
+  }
+  td::actor::send_closure(it->second, &AdnlPeerPair::get_actual_ip, std::move(promise));
 }
 
 void AdnlPeerImpl::update_addr_list(AdnlNodeIdShort local_id, td::uint32 local_mode,

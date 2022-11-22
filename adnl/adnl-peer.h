@@ -59,6 +59,7 @@ class AdnlPeerPair : public td::actor::Actor {
   virtual void update_peer_id(AdnlNodeIdFull id) = 0;
   virtual void update_addr_list(AdnlAddressList addr_list) = 0;
   virtual void get_conn_ip_str(td::Promise<td::string> promise) = 0;
+  virtual void get_actual_ip(td::Promise<td::IPAddress> promise) = 0;
 
   static td::actor::ActorOwn<AdnlPeerPair> create(td::actor::ActorId<AdnlNetworkManager> network_manager,
                                                   td::actor::ActorId<AdnlPeerTable> peer_table, td::uint32 local_mode,
@@ -100,6 +101,7 @@ class AdnlPeer : public td::actor::Actor {
                                 td::actor::ActorId<AdnlLocalId> local_actor, AdnlAddressList addr_list) = 0;
   virtual void update_dht_node(td::actor::ActorId<dht::Dht> dht_node) = 0;
   virtual void get_conn_ip_str(AdnlNodeIdShort l_id, td::Promise<td::string> promise) = 0;
+  virtual void get_actual_ip(AdnlNodeIdShort local_id, td::Promise<td::IPAddress> promise) = 0;
 };
 
 }  // namespace adnl

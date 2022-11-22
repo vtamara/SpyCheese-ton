@@ -385,6 +385,16 @@ void AdnlPeerTableImpl::get_conn_ip_str(AdnlNodeIdShort l_id, AdnlNodeIdShort p_
   td::actor::send_closure(it->second, &AdnlPeer::get_conn_ip_str, l_id, std::move(promise));
 }
 
+void AdnlPeerTableImpl::get_actual_ip(AdnlNodeIdShort local_id, AdnlNodeIdShort peer_id,
+                                      td::Promise<td::IPAddress> promise) {
+  auto it = peers_.find(peer_id);
+  if (it == peers_.end()) {
+    promise.set_error(td::Status::Error("Unknown peer"));
+    return;
+  }
+  td::actor::send_closure(it->second, &AdnlPeer::get_actual_ip, local_id, std::move(promise));
+}
+
 }  // namespace adnl
 
 }  // namespace ton

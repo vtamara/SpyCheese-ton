@@ -122,6 +122,7 @@ class DhtMemberImpl : public DhtMember {
   void process_query(adnl::AdnlNodeIdShort src, ton_api::dht_store &query, td::Promise<td::BufferSlice> promise);
   void process_query(adnl::AdnlNodeIdShort src, ton_api::dht_getSignedAddressList &query,
                      td::Promise<td::BufferSlice> promise);
+  void process_query(adnl::AdnlNodeIdShort src, ton_api::dht_getMyIp &query, td::Promise<td::BufferSlice> promise);
 
  public:
   DhtMemberImpl(adnl::AdnlNodeIdShort id, std::string db_root, td::actor::ActorId<keyring::Keyring> keyring,

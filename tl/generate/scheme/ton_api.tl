@@ -196,6 +196,7 @@ dht.store value:dht.value = dht.Stored;
 dht.findNode key:int256 k:int = dht.Nodes; 
 dht.findValue key:int256 k:int = dht.ValueResult; 
 dht.getSignedAddressList = dht.Node;
+dht.getMyIp = adnl.Address;
 
 dht.query node:dht.node = True;
 

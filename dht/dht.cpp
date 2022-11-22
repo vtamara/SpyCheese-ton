@@ -90,6 +90,7 @@ void DhtMemberImpl::start_up() {
                                     ton_api::dht_findValue::ID,
                                     ton_api::dht_store::ID,
                                     ton_api::dht_ping::ID,
+                                    ton_api::dht_getMyIp::ID,
                                     ton_api::dht_query::ID,
                                     ton_api::dht_message::ID};
 
@@ -297,6 +298,16 @@ void DhtMemberImpl::process_query(adnl::AdnlNodeIdShort src, ton_api::dht_getSig
     promise.set_value(serialize_tl_object(R.move_as_ok().tl(), true));
   });
   get_self_node(std::move(P));
+}
+
+void DhtMemberImpl::process_query(adnl::AdnlNodeIdShort src, ton_api::dht_getMyIp &query,
+                                  td::Promise<td::BufferSlice> promise) {
+  td::actor::send_closure(
+      adnl_, &adnl::Adnl::get_actual_ip, id_, src, [promise = std::move(promise)](td::Result<td::IPAddress> R) mutable {
+        TRY_RESULT_PROMISE(promise, ip, std::move(R));
+        TRY_RESULT_PROMISE(promise, addr, adnl::AdnlAddressImpl::create_udp(ip));
+        promise.set_result(serialize_tl_object(addr->tl(), true));
+      });
 }
 
 void DhtMemberImpl::receive_query(adnl::AdnlNodeIdShort src, td::BufferSlice data,

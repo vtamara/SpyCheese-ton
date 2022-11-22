@@ -104,6 +104,8 @@ class AdnlPeerTableImpl : public AdnlPeerTable {
                      td::Promise<std::pair<td::actor::ActorOwn<AdnlTunnel>, AdnlAddress>> promise) override;
   void get_conn_ip_str(AdnlNodeIdShort l_id, AdnlNodeIdShort p_id, td::Promise<td::string> promise) override;
 
+  void get_actual_ip(AdnlNodeIdShort local_id, AdnlNodeIdShort peer_id, td::Promise<td::IPAddress> promise) override;
+
   struct PrintId {};
   PrintId print_id() const {
     return PrintId{};
